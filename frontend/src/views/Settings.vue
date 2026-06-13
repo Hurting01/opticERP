@@ -1,7 +1,8 @@
 <script setup>
 // Settings — управление должностями и сотрудниками.
 // CRUD через Wails -> Go -> SQLite.
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { Modal } from 'bootstrap';
 import NavigationHeader from '../components/NavigationHeader.vue';
 import api from '../api';
 
@@ -31,20 +32,49 @@ async function loadData() {
   }
 }
 
+// Ссылки на DOM-узлы модалок (инициализируются после рендера шаблона).
+const addPositionModalRef = ref(null);
+const addEmployeeModalRef = ref(null);
+let addPositionModal = null;
+let addEmployeeModal = null;
+
 function openAddPosition() {
   modalMode.value = 'position';
   newPositionName.value = '';
   newPositionData.value = { norm_hours: null, hours_per_shift: null, salary: null, additional_payments: null };
+  nextTick(() => showModal('position'));
 }
 
 function openAddEmployee() {
   modalMode.value = 'employee';
   selectedPositionId.value = positions.value.length > 0 ? positions.value[0].id : '';
   newFullName.value = '';
+  nextTick(() => showModal('employee'));
+}
+
+function showModal(kind) {
+  const refEl = kind === 'position' ? addPositionModalRef.value : addEmployeeModalRef.value;
+  if (!refEl) return;
+  let instance = kind === 'position' ? addPositionModal : addEmployeeModal;
+  if (!instance) {
+    instance = new Modal(refEl, { backdrop: true, keyboard: true });
+    if (kind === 'position') addPositionModal = instance;
+    else addEmployeeModal = instance;
+  }
+  instance.show();
 }
 
 function closeModal() {
-  modalMode.value = null;
+  // Закрываем активную модалку через Bootstrap API; modalMode очищаем
+  // на событии 'hidden.bs.modal', чтобы корректно сработала анимация.
+  if (modalMode.value === 'position' && addPositionModal) addPositionModal.hide();
+  else if (modalMode.value === 'employee' && addEmployeeModal) addEmployeeModal.hide();
+}
+
+function onModalHidden(kind) {
+  return () => {
+    if (modalMode.value === kind) modalMode.value = null;
+  };
 }
 
 async function handleSaveNewItem() {
@@ -182,6 +212,15 @@ function onNewNumber(field, value) {
 }
 
 onMounted(loadData);
+
+// При размонтировании компонента сбрасываем инстансы Bootstrap,
+// чтобы не оставлять обработчиков событий на удалённых DOM-узлах.
+onBeforeUnmount(() => {
+  if (addPositionModal) addPositionModal.dispose();
+  if (addEmployeeModal) addEmployeeModal.dispose();
+  addPositionModal = null;
+  addEmployeeModal = null;
+});
 </script>
 
 <template>
@@ -350,98 +389,134 @@ onMounted(loadData);
       </div>
     </div>
 
-    <!-- Модалка -->
-    <div v-if="modalMode" class="modal-backdrop" @click="closeModal"></div>
-    <div v-if="modalMode" class="modal">
-      <div class="modal-dialog">
-        <div class="modal-header">
-          <h3 class="modal-title">{{ modalMode === 'position' ? 'Добавить должность' : 'Добавить сотрудника' }}</h3>
-          <button class="btn btn-light btn-sm" @click="closeModal">✕</button>
-        </div>
-        <div class="modal-body d-flex flex-col gap-3">
-          <div class="form-group">
-            <label class="form-label">{{ modalMode === 'employee' ? 'Должность' : 'Название должности' }}</label>
-            <select
-              v-if="modalMode === 'employee'"
-              v-model.number="selectedPositionId"
-              class="form-select"
-              autofocus
-            >
-              <option value="">Выберите должность</option>
-              <option v-for="pos in positions" :key="pos.id" :value="pos.id">{{ pos.name }}</option>
-            </select>
-            <input
-              v-else
-              v-model="newPositionName"
-              type="text"
-              class="form-control"
-              placeholder="Введите должность"
-              autofocus
-            />
-          </div>
-          <template v-if="modalMode === 'position'">
-            <div class="form-group">
-              <label class="form-label">Норма часов</label>
-              <input
-                type="number"
-                min="0"
-                class="form-control"
-                :value="newPositionData.norm_hours ?? ''"
-                @input="onNewNumber('norm_hours', $event.target.value)"
-                placeholder="Введите значение"
-              />
+    <!-- === Модалки: Bootstrap Modal API === -->
+    <!-- Телепортируем модалки в body, чтобы они не были вложены в структуру компонента -->
+    <Teleport to="body">
+      <!-- Модалка добавления должности -->
+      <div
+        ref="addPositionModalRef"
+        class="modal fade"
+        tabindex="-1"
+        aria-hidden="true"
+        aria-labelledby="addPositionModalTitle"
+        @hidden.bs.modal="onModalHidden('position')"
+      >
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="addPositionModalTitle" class="modal-title">Добавить должность</h3>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="form-group">
-              <label class="form-label">Часов/смена</label>
-              <input
-                type="number"
-                step="0.5"
-                min="0"
-                class="form-control"
-                :value="newPositionData.hours_per_shift ?? ''"
-                @input="onNewNumber('hours_per_shift', $event.target.value)"
-                placeholder="Введите значение"
-              />
+            <div class="modal-body d-flex flex-column gap-3">
+              <div class="mb-2">
+                <label class="form-label">Название должности</label>
+                <input
+                  v-model="newPositionName"
+                  type="text"
+                  class="form-control"
+                  placeholder="Введите должность"
+                  data-bs-autofocus
+                />
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Норма часов</label>
+                <input
+                  type="number"
+                  min="0"
+                  class="form-control"
+                  :value="newPositionData.norm_hours ?? ''"
+                  @input="onNewNumber('norm_hours', $event.target.value)"
+                  placeholder="Введите значение"
+                />
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Часов/смена</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  class="form-control"
+                  :value="newPositionData.hours_per_shift ?? ''"
+                  @input="onNewNumber('hours_per_shift', $event.target.value)"
+                  placeholder="Введите значение"
+                />
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Зарплата (₽)</label>
+                <input
+                  type="number"
+                  min="0"
+                  class="form-control"
+                  :value="newPositionData.salary ?? ''"
+                  @input="onNewNumber('salary', $event.target.value)"
+                  placeholder="Введите значение"
+                />
+              </div>
+              <div class="mb-2">
+                <label class="form-label">Дополнительные выплаты (₽)</label>
+                <input
+                  type="number"
+                  min="0"
+                  class="form-control"
+                  :value="newPositionData.additional_payments ?? ''"
+                  @input="onNewNumber('additional_payments', $event.target.value)"
+                  placeholder="Введите значение"
+                />
+              </div>
             </div>
-            <div class="form-group">
-              <label class="form-label">Зарплата (₽)</label>
-              <input
-                type="number"
-                min="0"
-                class="form-control"
-                :value="newPositionData.salary ?? ''"
-                @input="onNewNumber('salary', $event.target.value)"
-                placeholder="Введите значение"
-              />
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+              <button type="button" class="btn btn-primary" @click="handleSaveNewItem">Сохранить</button>
             </div>
-            <div class="form-group">
-              <label class="form-label">Дополнительные выплаты (₽)</label>
-              <input
-                type="number"
-                min="0"
-                class="form-control"
-                :value="newPositionData.additional_payments ?? ''"
-                @input="onNewNumber('additional_payments', $event.target.value)"
-                placeholder="Введите значение"
-              />
-            </div>
-          </template>
-          <div v-if="modalMode === 'employee'" class="form-group">
-            <label class="form-label">ФИО</label>
-            <input
-              v-model="newFullName"
-              type="text"
-              class="form-control"
-              placeholder="Введите ФИО"
-            />
-          </div>
-          <div class="d-flex gap-2">
-            <button class="btn btn-primary" @click="handleSaveNewItem">Сохранить</button>
-            <button class="btn btn-secondary" @click="closeModal">Отмена</button>
           </div>
         </div>
       </div>
-    </div>
+
+      <!-- Модалка добавления сотрудника -->
+      <div
+        ref="addEmployeeModalRef"
+        class="modal fade"
+        tabindex="-1"
+        aria-hidden="true"
+        aria-labelledby="addEmployeeModalTitle"
+        @hidden.bs.modal="onModalHidden('employee')"
+      >
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="addEmployeeModalTitle" class="modal-title">Добавить сотрудника</h3>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body d-flex flex-column gap-3">
+              <div class="mb-2">
+                <label class="form-label">Должность</label>
+                <select
+                  v-model.number="selectedPositionId"
+                  class="form-select"
+                  data-bs-autofocus
+                >
+                  <option value="">Выберите должность</option>
+                  <option v-for="pos in positions" :key="pos.id" :value="pos.id">{{ pos.name }}</option>
+                </select>
+              </div>
+              <div class="mb-2">
+                <label class="form-label">ФИО</label>
+                <input
+                  v-model="newFullName"
+                  type="text"
+                  class="form-control"
+                  placeholder="Введите ФИО"
+                />
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+              <button type="button" class="btn btn-primary" @click="handleSaveNewItem">Сохранить</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -460,5 +535,97 @@ onMounted(loadData);
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+</style>
+
+<style>
+/* Глобальные переопределения для Bootstrap Modal API.
+   После Teleport модалка выходит из scope, поэтому стили должны быть глобальными.
+   Используем !important для переопределения глобальных стилей из index.css */
+
+/* Глобальный CSS из index.css делает модалку всегда видимой через fixed+flex.
+   Для Bootstrap нужно скрывать её по умолчанию и показывать только с классом .show */
+.modal.fade {
+  display: none !important;
+}
+
+.modal.fade.show {
+  display: block !important;
+}
+
+/* Правильное позиционирование для Bootstrap */
+.modal {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  z-index: 1055 !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  outline: 0 !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  background: transparent !important;
+  animation: none !important;
+}
+
+.modal-dialog {
+  position: relative !important;
+  width: auto !important;
+  margin: 1.75rem auto !important;
+  max-width: 480px !important;
+  pointer-events: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  animation: none !important;
+}
+
+.modal.fade .modal-dialog {
+  transition: transform 0.3s ease-out !important;
+  transform: translate(0, -50px) !important;
+}
+
+.modal.show .modal-dialog {
+  transform: none !important;
+}
+
+.modal-dialog-centered {
+  display: flex !important;
+  align-items: center !important;
+  min-height: calc(100% - 3.5rem) !important;
+}
+
+.modal-content {
+  position: relative !important;
+  display: flex !important;
+  flex-direction: column !important;
+  width: 100% !important;
+  pointer-events: auto !important;
+  background-color: #fff !important;
+  background-clip: padding-box !important;
+  border: 1px solid rgba(0, 0, 0, 0.2) !important;
+  border-radius: var(--radius) !important;
+  outline: 0 !important;
+  box-shadow: 0 10px 40px rgba(15, 23, 42, 0.18) !important;
+}
+
+.modal-backdrop {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  z-index: 1050 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background-color: rgba(15, 23, 42, 0.5) !important;
+}
+
+.modal-backdrop.fade {
+  opacity: 0 !important;
+}
+
+.modal-backdrop.show {
+  opacity: 1 !important;
 }
 </style>
