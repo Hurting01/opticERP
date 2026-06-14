@@ -16,9 +16,9 @@ export const api = {
   positions: {
     list: () => GetPositions(),
     create: (name, normHours, hoursPerShift, salary, additionalPayments) =>
-      CreatePosition(name, normHours ?? null, hoursPerShift ?? null, salary ?? null, additionalPayments ?? null),
+      CreatePosition(name, normHours ?? null, salary ?? null, hoursPerShift ?? null, additionalPayments ?? null),
     update: (positionId, positionName, normHours, hoursPerShift, salary, additionalPayments) =>
-      UpdatePosition(positionId, positionName, normHours ?? null, hoursPerShift ?? null, salary ?? null, additionalPayments ?? null),
+      UpdatePosition(positionId, positionName, normHours ?? null, salary ?? null, hoursPerShift ?? null, additionalPayments ?? null),
     remove: (positionId) => DeletePosition(positionId),
   },
   staff: {

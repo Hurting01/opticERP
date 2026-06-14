@@ -127,11 +127,23 @@ func UpdatePosition(positionID int64, positionName string, normHours, salary *in
 }
 
 // DeletePosition удаляет должность. Возвращает true при успехе.
+// Перед удалением проверяет, нет ли сотрудников с данной должностью.
 func DeletePosition(positionID int64) (bool, error) {
 	conn, err := db.DB()
 	if err != nil {
 		return false, err
 	}
+
+	// Проверяем, есть ли сотрудники с этой должностью.
+	var count int64
+	err = conn.QueryRow(`SELECT COUNT(*) FROM staff WHERE position_id = ?`, positionID).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("ошибка проверки сотрудников: %w", err)
+	}
+	if count > 0 {
+		return false, fmt.Errorf("нельзя удалить должность: назначено %d сотр. Сначала измените должность или удалите сотрудников", count)
+	}
+
 	res, err := conn.Exec(`DELETE FROM positions WHERE id = ?`, positionID)
 	if err != nil {
 		return false, fmt.Errorf("ошибка удаления должности: %w", err)
