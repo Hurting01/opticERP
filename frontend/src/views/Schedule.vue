@@ -60,15 +60,11 @@ async function loadEmployees() {
 
 function openModal() {
   loadEmployees();
-  if (!modalInstance.value && modalEl.value) {
-    modalInstance.value = new Modal(modalEl.value);
-  }
   modalInstance.value?.show();
 }
 
 function closeModal() {
   modalInstance.value?.hide();
-  selectedEmployee.value = '';
 }
 
 function addRecord() {
@@ -88,7 +84,19 @@ function getScheduleValue(employee, day) {
 
 const days = computed(() => Array.from({ length: daysInMonth }, (_, i) => i + 1));
 
-onMounted(loadEmployees);
+onMounted(() => {
+  loadEmployees();
+  
+  // Инициализируем Bootstrap Modal после монтирования компонента
+  if (modalEl.value) {
+    modalInstance.value = new Modal(modalEl.value);
+    
+    // Очищаем форму при закрытии модального окна
+    modalEl.value.addEventListener('hidden.bs.modal', () => {
+      selectedEmployee.value = '';
+    });
+  }
+});
 </script>
 
 <template>

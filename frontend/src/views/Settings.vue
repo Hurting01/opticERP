@@ -1,7 +1,7 @@
 <script setup>
 // Settings — управление должностями и сотрудниками.
 // CRUD через Wails -> Go -> SQLite.
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { Modal } from 'bootstrap';
 import NavigationHeader from '../components/NavigationHeader.vue';
 import api from '../api';
@@ -42,39 +42,20 @@ function openAddPosition() {
   modalMode.value = 'position';
   newPositionName.value = '';
   newPositionData.value = { norm_hours: null, hours_per_shift: null, salary: null, additional_payments: null };
-  nextTick(() => showModal('position'));
+  addPositionModal?.show();
 }
 
 function openAddEmployee() {
   modalMode.value = 'employee';
   selectedPositionId.value = positions.value.length > 0 ? positions.value[0].id : '';
   newFullName.value = '';
-  nextTick(() => showModal('employee'));
-}
-
-function showModal(kind) {
-  const refEl = kind === 'position' ? addPositionModalRef.value : addEmployeeModalRef.value;
-  if (!refEl) return;
-  let instance = kind === 'position' ? addPositionModal : addEmployeeModal;
-  if (!instance) {
-    instance = new Modal(refEl, { backdrop: true, keyboard: true });
-    if (kind === 'position') addPositionModal = instance;
-    else addEmployeeModal = instance;
-  }
-  instance.show();
+  addEmployeeModal?.show();
 }
 
 function closeModal() {
-  // Закрываем активную модалку через Bootstrap API; modalMode очищаем
-  // на событии 'hidden.bs.modal', чтобы корректно сработала анимация.
+  // Закрываем активную модалку через Bootstrap API
   if (modalMode.value === 'position' && addPositionModal) addPositionModal.hide();
   else if (modalMode.value === 'employee' && addEmployeeModal) addEmployeeModal.hide();
-}
-
-function onModalHidden(kind) {
-  return () => {
-    if (modalMode.value === kind) modalMode.value = null;
-  };
 }
 
 async function handleSaveNewItem() {
@@ -211,7 +192,24 @@ function onNewNumber(field, value) {
   newPositionData.value = { ...newPositionData.value, [field]: val };
 }
 
-onMounted(loadData);
+onMounted(() => {
+  loadData();
+  
+  // Инициализируем модальные окна после монтирования
+  if (addPositionModalRef.value) {
+    addPositionModal = new Modal(addPositionModalRef.value, { backdrop: true, keyboard: true });
+    addPositionModalRef.value.addEventListener('hidden.bs.modal', () => {
+      modalMode.value = null;
+    });
+  }
+  
+  if (addEmployeeModalRef.value) {
+    addEmployeeModal = new Modal(addEmployeeModalRef.value, { backdrop: true, keyboard: true });
+    addEmployeeModalRef.value.addEventListener('hidden.bs.modal', () => {
+      modalMode.value = null;
+    });
+  }
+});
 
 // При размонтировании компонента сбрасываем инстансы Bootstrap,
 // чтобы не оставлять обработчиков событий на удалённых DOM-узлах.
@@ -399,7 +397,6 @@ onBeforeUnmount(() => {
         tabindex="-1"
         aria-hidden="true"
         aria-labelledby="addPositionModalTitle"
-        @hidden.bs.modal="onModalHidden('position')"
       >
         <div class="modal-dialog modal-dialog-centered">
           <div class="modal-content">
@@ -479,7 +476,6 @@ onBeforeUnmount(() => {
         tabindex="-1"
         aria-hidden="true"
         aria-labelledby="addEmployeeModalTitle"
-        @hidden.bs.modal="onModalHidden('employee')"
       >
         <div class="modal-dialog modal-dialog-centered">
           <div class="modal-content">
@@ -535,97 +531,5 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-</style>
-
-<style>
-/* Глобальные переопределения для Bootstrap Modal API.
-   После Teleport модалка выходит из scope, поэтому стили должны быть глобальными.
-   Используем !important для переопределения глобальных стилей из index.css */
-
-/* Глобальный CSS из index.css делает модалку всегда видимой через fixed+flex.
-   Для Bootstrap нужно скрывать её по умолчанию и показывать только с классом .show */
-.modal.fade {
-  display: none !important;
-}
-
-.modal.fade.show {
-  display: block !important;
-}
-
-/* Правильное позиционирование для Bootstrap */
-.modal {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  z-index: 1055 !important;
-  width: 100% !important;
-  height: 100% !important;
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
-  outline: 0 !important;
-  align-items: flex-start !important;
-  justify-content: center !important;
-  padding: 0 !important;
-  background: transparent !important;
-  animation: none !important;
-}
-
-.modal-dialog {
-  position: relative !important;
-  width: auto !important;
-  margin: 1.75rem auto !important;
-  max-width: 480px !important;
-  pointer-events: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  animation: none !important;
-}
-
-.modal.fade .modal-dialog {
-  transition: transform 0.3s ease-out !important;
-  transform: translate(0, -50px) !important;
-}
-
-.modal.show .modal-dialog {
-  transform: none !important;
-}
-
-.modal-dialog-centered {
-  display: flex !important;
-  align-items: center !important;
-  min-height: calc(100% - 3.5rem) !important;
-}
-
-.modal-content {
-  position: relative !important;
-  display: flex !important;
-  flex-direction: column !important;
-  width: 100% !important;
-  pointer-events: auto !important;
-  background-color: #fff !important;
-  background-clip: padding-box !important;
-  border: 1px solid rgba(0, 0, 0, 0.2) !important;
-  border-radius: var(--radius) !important;
-  outline: 0 !important;
-  box-shadow: 0 10px 40px rgba(15, 23, 42, 0.18) !important;
-}
-
-.modal-backdrop {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  z-index: 1050 !important;
-  width: 100vw !important;
-  height: 100vh !important;
-  background-color: rgba(15, 23, 42, 0.5) !important;
-}
-
-.modal-backdrop.fade {
-  opacity: 0 !important;
-}
-
-.modal-backdrop.show {
-  opacity: 1 !important;
 }
 </style>

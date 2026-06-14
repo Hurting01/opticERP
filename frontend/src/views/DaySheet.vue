@@ -3,6 +3,7 @@
 // Все данные хранятся в localStorage (как в Tauri-версии).
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { Modal } from 'bootstrap';
 import NavigationHeader from '../components/NavigationHeader.vue';
 import api from '../api';
 
@@ -23,7 +24,8 @@ const cashEvening = ref('');
 const sales = ref([]);
 const tasks = ref([]);
 const openAccordion = ref(null);
-const showDeleteConfirm = ref(false);
+const deleteModalRef = ref(null);
+let deleteModalInstance = null;
 const saleToDelete = ref(null);
 const newTaskText = ref('');
 const taskPage = ref(0);
@@ -164,7 +166,7 @@ function updateSale(id, field, value) {
 
 function deleteSale(id) {
   sales.value = sales.value.filter((s) => s.id !== id);
-  showDeleteConfirm.value = false;
+  deleteModalInstance?.hide();
 }
 
 function confirmDelete() {
@@ -173,11 +175,11 @@ function confirmDelete() {
 
 function showDeleteModal(id) {
   saleToDelete.value = id;
-  showDeleteConfirm.value = true;
+  deleteModalInstance?.show();
 }
 
 function cancelDelete() {
-  showDeleteConfirm.value = false;
+  deleteModalInstance?.hide();
   saleToDelete.value = null;
 }
 
@@ -255,10 +257,22 @@ watch(
 onMounted(() => {
   loadData();
   loadEmployees();
+  
+  // Инициализируем Bootstrap Modal для подтверждения удаления
+  if (deleteModalRef.value) {
+    deleteModalInstance = new Modal(deleteModalRef.value);
+    deleteModalRef.value.addEventListener('hidden.bs.modal', () => {
+      saleToDelete.value = null;
+    });
+  }
 });
 
 onBeforeUnmount(() => {
   if (saveTimeout.value) clearTimeout(saveTimeout.value);
+  if (deleteModalInstance) {
+    deleteModalInstance.dispose();
+    deleteModalInstance = null;
+  }
 });
 
 const uniquePositions = computed(() => [...new Set(allEmployees.value.map((e) => e.position).filter(Boolean))]);
@@ -549,18 +563,19 @@ const uniquePositions = computed(() => [...new Set(allEmployees.value.map((e) =>
       <option v-for="v in axValues" :key="v" :value="v" />
     </datalist>
 
-    <!-- Модальное окно подтверждения удаления -->
-    <div v-if="showDeleteConfirm" class="modal-backdrop" @click="cancelDelete"></div>
-    <div v-if="showDeleteConfirm" class="modal">
-      <div class="modal-dialog">
-        <div class="modal-header">
-          <h3 class="modal-title">Подтвердите действие</h3>
-          <button class="btn btn-light btn-sm" @click="cancelDelete">✕</button>
-        </div>
-        <div class="modal-body">Вы уверены что хотите удалить данный товар?</div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="cancelDelete">Отмена</button>
-          <button class="btn btn-danger" @click="confirmDelete">Удалить</button>
+    <!-- Bootstrap Modal: подтверждение удаления -->
+    <div ref="deleteModalRef" class="modal fade" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 id="deleteModalLabel" class="modal-title">Подтвердите действие</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">Вы уверены что хотите удалить данный товар?</div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+            <button type="button" class="btn btn-danger" @click="confirmDelete">Удалить</button>
+          </div>
         </div>
       </div>
     </div>

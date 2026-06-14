@@ -259,15 +259,17 @@ h1, h2, h3, h4, h5 {
   font-size: 12px;
 }
 
-/* === Модальные окна === */
-.modal-backdrop {
+/* === Legacy-модальные окна ===
+   Bootstrap-модалки используют классы `.modal.fade` и собственные transition-правила.
+   Эти старые стили не должны применяться к Bootstrap API, иначе ломается fade-анимация. */
+.modal-backdrop:not(.fade) {
   position: fixed;
   inset: 0;
   background: rgba(15, 23, 42, 0.45);
   z-index: 1040;
   animation: fadeIn 0.18s ease-out;
 }
-.modal {
+.modal:not(.fade) {
   position: fixed;
   inset: 0;
   display: flex;
@@ -276,7 +278,7 @@ h1, h2, h3, h4, h5 {
   z-index: 1050;
   padding: 16px;
 }
-.modal-dialog {
+.modal:not(.fade) .modal-dialog {
   width: 100%;
   max-width: 480px;
   background: #fff;
