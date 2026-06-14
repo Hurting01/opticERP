@@ -241,61 +241,66 @@ onBeforeUnmount(() => {
         <button class="btn btn-outline-primary btn-sm" @click="openAddPosition">+ Добавить должность</button>
       </div>
       <div class="card-body">
-        <div v-if="editingPosition" class="d-flex flex-col gap-2">
+        <div v-if="editingPosition" class="d-flex gap-2 align-items-start">
           <div class="form-group">
+            <label class="form-label">Название должности</label>
             <input
               v-model="editingPosition.name"
               type="text"
-              class="form-control"
-              placeholder="Название должности"
+              class="form-control form-control-sm"
+              placeholder="Введите должность"
               style="max-width: 300px"
               autofocus
             />
           </div>
           <div class="form-group">
+            <label class="form-label">Норма часов</label>
             <input
               type="number"
               min="0"
-              class="form-control"
-              placeholder="Норма часов"
+              class="form-control form-control-sm"
+              placeholder="Введите значение"
               :value="editingPosition.norm_hours ?? ''"
               @input="onNumber('norm_hours', $event.target.value)"
             />
           </div>
           <div class="form-group">
+            <label class="form-label">Часов/смена</label>
             <input
               type="number"
               step="0.5"
               min="0"
-              class="form-control"
-              placeholder="Часов/смена"
+              class="form-control form-control-sm"
+              placeholder="Введите значение"
               :value="editingPosition.hours_per_shift ?? ''"
               @input="onNumber('hours_per_shift', $event.target.value)"
             />
           </div>
           <div class="form-group">
+            <label class="form-label">Зарплата (₽)</label>
             <input
               type="number"
               min="0"
-              class="form-control"
-              placeholder="Зарплата (₽)"
+              class="form-control form-control-sm"
+              placeholder="Введите значение"
               :value="editingPosition.salary ?? ''"
               @input="onNumber('salary', $event.target.value)"
             />
           </div>
           <div class="form-group">
+            <label class="form-label">Дополнительные выплаты (₽)</label>
             <input
               type="number"
               min="0"
-              class="form-control"
-              placeholder="Дополнительные выплаты (₽)"
+              class="form-control form-control-sm"
+              placeholder="Введите значение"
               :value="editingPosition.additional_payments ?? ''"
               @input="onNumber('additional_payments', $event.target.value)"
             />
           </div>
-          <div class="d-flex gap-2">
-            <button class="btn btn-success btn-sm" @click="saveEditPosition">Сохранить</button>
-            <button class="btn btn-secondary btn-sm" @click="cancelEditPosition">Отмена</button>
+          <div class="d-flex gap-2 edit-position-actions">
+            <button class="btn btn-success btn-sm" style="height:31px" @click="saveEditPosition">Сохранить</button>
+            <button class="btn btn-secondary btn-sm" style="height:31px" @click="cancelEditPosition">Отмена</button>
           </div>
         </div>
         <table v-else class="table table-striped table-bordered table-hover table-sm">
@@ -531,5 +536,8 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+.edit-position-actions {
+  margin-top: 25px;
 }
 </style>
