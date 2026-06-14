@@ -35,8 +35,33 @@ async function loadData() {
 // Ссылки на DOM-узлы модалок (инициализируются после рендера шаблона).
 const addPositionModalRef = ref(null);
 const addEmployeeModalRef = ref(null);
+const alertModalRef = ref(null);
+const confirmModalRef = ref(null);
 let addPositionModal = null;
 let addEmployeeModal = null;
+let alertModal = null;
+let confirmModal = null;
+
+const alertDialog = ref({ title: 'Сообщение', message: '' });
+const confirmDialog = ref({ title: 'Подтверждение', message: '', resolve: null });
+
+function showAlert(message, title = 'Ошибка') {
+  alertDialog.value = { title, message: String(message) };
+  alertModal?.show();
+}
+
+function showConfirm(message, title = 'Подтверждение') {
+  return new Promise((resolve) => {
+    confirmDialog.value = { title, message, resolve };
+    confirmModal?.show();
+  });
+}
+
+function resolveConfirm(result) {
+  confirmDialog.value.resolve?.(result);
+  confirmDialog.value = { ...confirmDialog.value, resolve: null };
+  confirmModal?.hide();
+}
 
 function openAddPosition() {
   modalMode.value = 'position';
@@ -72,7 +97,7 @@ async function handleSaveNewItem() {
       if (created) positions.value = [...positions.value, created];
     } catch (err) {
       console.error('Ошибка создания должности:', err);
-      alert('Ошибка создания должности: ' + err);
+      showAlert('Ошибка создания должности: ' + err);
     }
   } else if (modalMode.value === 'employee') {
     if (!selectedPositionId.value || !newFullName.value.trim()) return;
@@ -84,31 +109,31 @@ async function handleSaveNewItem() {
       }
     } catch (err) {
       console.error('Ошибка создания сотрудника:', err);
-      alert('Ошибка создания сотрудника: ' + err);
+      showAlert('Ошибка создания сотрудника: ' + err);
     }
   }
   closeModal();
 }
 
 async function removePosition(pos) {
-  if (!confirm('Удалить должность?')) return;
+  if (!(await showConfirm('Удалить должность?'))) return;
   try {
     const ok = await api.positions.remove(pos.id);
     if (ok) positions.value = positions.value.filter((p) => p.id !== pos.id);
   } catch (err) {
     console.error('Ошибка удаления:', err);
-    alert('Ошибка удаления: ' + err);
+    showAlert('Ошибка удаления: ' + err);
   }
 }
 
 async function removeStaff(emp) {
-  if (!confirm('Удалить сотрудника?')) return;
+  if (!(await showConfirm('Удалить сотрудника?'))) return;
   try {
     const ok = await api.staff.remove(emp.id);
     if (ok) staff.value = staff.value.filter((s) => s.id !== emp.id);
   } catch (err) {
     console.error('Ошибка удаления:', err);
-    alert('Ошибка удаления: ' + err);
+    showAlert('Ошибка удаления: ' + err);
   }
 }
 
@@ -131,7 +156,7 @@ async function saveEditPosition() {
     editingPosition.value = null;
   } catch (err) {
     console.error('Ошибка обновления должности:', err);
-    alert('Ошибка обновления должности: ' + err);
+    showAlert('Ошибка обновления должности: ' + err);
   }
 }
 
@@ -158,7 +183,7 @@ async function saveEditStaff() {
     newFullName.value = '';
   } catch (err) {
     console.error('Ошибка обновления сотрудника:', err);
-    alert('Ошибка обновления сотрудника: ' + err);
+    showAlert('Ошибка обновления сотрудника: ' + err);
   }
 }
 
@@ -209,6 +234,17 @@ onMounted(() => {
       modalMode.value = null;
     });
   }
+
+  if (alertModalRef.value) {
+    alertModal = new Modal(alertModalRef.value, { backdrop: true, keyboard: true });
+  }
+
+  if (confirmModalRef.value) {
+    confirmModal = new Modal(confirmModalRef.value, { backdrop: 'static', keyboard: false });
+    confirmModalRef.value.addEventListener('hidden.bs.modal', () => {
+      if (confirmDialog.value.resolve) resolveConfirm(false);
+    });
+  }
 });
 
 // При размонтировании компонента сбрасываем инстансы Bootstrap,
@@ -216,8 +252,12 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (addPositionModal) addPositionModal.dispose();
   if (addEmployeeModal) addEmployeeModal.dispose();
+  if (alertModal) alertModal.dispose();
+  if (confirmModal) confirmModal.dispose();
   addPositionModal = null;
   addEmployeeModal = null;
+  alertModal = null;
+  confirmModal = null;
 });
 </script>
 
@@ -513,6 +553,54 @@ onBeforeUnmount(() => {
             <div class="modal-footer">
               <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
               <button type="button" class="btn btn-primary" @click="handleSaveNewItem">Сохранить</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Модалка сообщения вместо browser alert() -->
+      <div
+        ref="alertModalRef"
+        class="modal fade"
+        tabindex="-1"
+        aria-hidden="true"
+        aria-labelledby="alertModalTitle"
+      >
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="alertModalTitle" class="modal-title">{{ alertDialog.title }}</h3>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              {{ alertDialog.message }}
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-primary" data-bs-dismiss="modal">ОК</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Модалка подтверждения вместо browser confirm() -->
+      <div
+        ref="confirmModalRef"
+        class="modal fade"
+        tabindex="-1"
+        aria-hidden="true"
+        aria-labelledby="confirmModalTitle"
+      >
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3 id="confirmModalTitle" class="modal-title">{{ confirmDialog.title }}</h3>
+            </div>
+            <div class="modal-body">
+              {{ confirmDialog.message }}
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" @click="resolveConfirm(false)">Отмена</button>
+              <button type="button" class="btn btn-danger" @click="resolveConfirm(true)">Удалить</button>
             </div>
           </div>
         </div>
