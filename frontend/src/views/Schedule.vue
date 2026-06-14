@@ -5,6 +5,7 @@
 import { ref, computed, onMounted } from 'vue';
 import NavigationHeader from '../components/NavigationHeader.vue';
 import api from '../api';
+import { Modal } from 'bootstrap';
 
 const month = new Date().getMonth() + 1;
 const year = new Date().getFullYear();
@@ -16,7 +17,8 @@ const monthNames = [
 const weekDays = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 
 const daysInMonth = new Date(year, month, 0).getDate();
-const showModal = ref(false);
+const modalInstance = ref(null);
+const modalEl = ref(null);
 const employees = ref([]);
 const selectedEmployee = ref('');
 const isLoadingEmployees = ref(false);
@@ -58,12 +60,17 @@ async function loadEmployees() {
 
 function openModal() {
   loadEmployees();
-  showModal.value = true;
+  if (!modalInstance.value && modalEl.value) {
+    modalInstance.value = new Modal(modalEl.value);
+  }
+  modalInstance.value?.show();
 }
+
 function closeModal() {
-  showModal.value = false;
+  modalInstance.value?.hide();
   selectedEmployee.value = '';
 }
+
 function addRecord() {
   if (!selectedEmployee.value) return;
   console.log('Добавить запись для сотрудника:', selectedEmployee.value);
@@ -90,7 +97,7 @@ onMounted(loadEmployees);
 
     <div class="card">
       <div class="card-body py-3">
-        <div class="d-flex justify-between align-center">
+        <div class="d-flex justify-content-between align-items-center">
           <h1 class="page-title">График — {{ monthNames[month - 1] }} {{ year }}</h1>
           <button class="btn btn-primary" @click="openModal">+ Добавить запись</button>
         </div>
@@ -144,29 +151,32 @@ onMounted(loadEmployees);
       </div>
     </div>
 
-    <div v-if="showModal" class="modal-backdrop" @click="closeModal"></div>
-    <div v-if="showModal" class="modal">
+    <!-- Bootstrap Modal -->
+    <div ref="modalEl" class="modal fade" tabindex="-1" aria-labelledby="addRecordModalLabel" aria-hidden="true">
       <div class="modal-dialog">
-        <div class="modal-header">
-          <h3 class="modal-title">Добавить запись</h3>
-          <button class="btn btn-light btn-sm" @click="closeModal">✕</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label class="form-label">Сотрудник</label>
-            <select
-              v-model="selectedEmployee"
-              class="form-select"
-              :disabled="isLoadingEmployees"
-            >
-              <option value="">Выберите сотрудника</option>
-              <option v-for="emp in employees" :key="emp.id" :value="emp.id">{{ emp.fullName }}</option>
-            </select>
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 id="addRecordModalLabel" class="modal-title">Добавить запись</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="closeModal">Отмена</button>
-          <button class="btn btn-primary" :disabled="!selectedEmployee" @click="addRecord">Добавить</button>
+          <div class="modal-body">
+            <div class="mb-3">
+              <label for="employeeSelect" class="form-label">Сотрудник</label>
+              <select
+                id="employeeSelect"
+                v-model="selectedEmployee"
+                class="form-select"
+                :disabled="isLoadingEmployees"
+              >
+                <option value="">Выберите сотрудника</option>
+                <option v-for="emp in employees" :key="emp.id" :value="emp.id">{{ emp.fullName }}</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+            <button type="button" class="btn btn-primary" :disabled="!selectedEmployee" @click="addRecord">Добавить</button>
+          </div>
         </div>
       </div>
     </div>
@@ -174,9 +184,6 @@ onMounted(loadEmployees);
 </template>
 
 <style scoped>
-.d-flex { display: flex; }
-.justify-between { justify-content: space-between; }
-.align-center { align-items: center; }
 .page-title {
   font-size: 20px;
   margin: 0;
