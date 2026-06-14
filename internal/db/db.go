@@ -50,7 +50,9 @@ func DB() (*sql.DB, error) {
 
 		// Параметр _pragma=foreign_keys(on) включает поддержку FK
 		// (по умолчанию в SQLite она выключена, что нам не подходит).
-		conn, err := sql.Open("sqlite", "file://"+filepath.ToSlash(dbPath)+"?_pragma=foreign_keys(on)")
+		// modernc.org/sqlite на Windows лучше работает с прямым путём без file://
+		dsn := dbPath + "?_pragma=foreign_keys(1)"
+		conn, err := sql.Open("sqlite", dsn)
 		if err != nil {
 			dbErr = fmt.Errorf("ошибка подключения к БД: %w", err)
 			return
