@@ -265,12 +265,12 @@ onBeforeUnmount(() => {
   <div>
     <NavigationHeader title="Настройки" />
 
-    <ul class="nav-tabs">
+    <ul class="nav nav-tabs mb-3">
       <li class="nav-item">
-        <button class="nav-link" :class="{ active: activeTab === 'positions' }" @click="activeTab = 'positions'">Должности</button>
+        <button type="button" class="nav-link" :class="{ active: activeTab === 'positions' }" @click="activeTab = 'positions'">Должности</button>
       </li>
       <li class="nav-item">
-        <button class="nav-link" :class="{ active: activeTab === 'staff' }" @click="activeTab = 'staff'">Персонал</button>
+        <button type="button" class="nav-link" :class="{ active: activeTab === 'staff' }" @click="activeTab = 'staff'">Персонал</button>
       </li>
     </ul>
 

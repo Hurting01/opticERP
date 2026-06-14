@@ -173,18 +173,18 @@ function fmt(n) {
   <div>
     <NavigationHeader title="Отчеты" />
 
-    <ul class="nav-tabs">
+    <ul class="nav nav-tabs mb-3">
       <li class="nav-item">
-        <button class="nav-link" :class="{ active: activeTab === 'bonus' }" @click="activeTab = 'bonus'">Бонусы</button>
+        <button type="button" class="nav-link" :class="{ active: activeTab === 'bonus' }" @click="activeTab = 'bonus'">Бонусы</button>
       </li>
       <li class="nav-item">
-        <button class="nav-link" :class="{ active: activeTab === 'salary' }" @click="activeTab = 'salary'">ЗП</button>
+        <button type="button" class="nav-link" :class="{ active: activeTab === 'salary' }" @click="activeTab = 'salary'">ЗП</button>
       </li>
       <li class="nav-item">
-        <button class="nav-link" :class="{ active: activeTab === 'conversion' }" @click="activeTab = 'conversion'">Конверсия</button>
+        <button type="button" class="nav-link" :class="{ active: activeTab === 'conversion' }" @click="activeTab = 'conversion'">Конверсия</button>
       </li>
       <li class="nav-item">
-        <button class="nav-link" :class="{ active: activeTab === 'orders' }" @click="activeTab = 'orders'">Заказы</button>
+        <button type="button" class="nav-link" :class="{ active: activeTab === 'orders' }" @click="activeTab = 'orders'">Заказы</button>
       </li>
     </ul>
 
