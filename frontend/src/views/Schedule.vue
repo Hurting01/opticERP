@@ -246,15 +246,14 @@ function getDayOfWeek(day) {
 }
 
 function getScheduleValue(employee, day) {
-  return employee.schedule[day] || '';
+  return employee.schedule[day] || false;
 }
 
-function startEditCell(employee, day) {
-  editingCell.value = {
-    employeeId: employee.id,
-    day,
-    value: getScheduleValue(employee, day) || '',
-  };
+function toggleShift(employee, day) {
+  const currentValue = getScheduleValue(employee, day);
+  const newValue = !currentValue;
+  
+  saveCell(employee, day, newValue);
 }
 
 function cancelEditCell() {
@@ -262,14 +261,11 @@ function cancelEditCell() {
 }
 
 function presetCycle(current) {
-  // Цикл по 'легенде' графика: пусто → 1 → к → Я → о → пусто
+  // Цикл по 'легенде' графика: false → true → true → true → false → false
   switch (current) {
-    case '': return '1';
-    case '1': return 'к';
-    case 'к': return 'Я';
-    case 'Я': return 'о';
-    case 'о': return '';
-    default: return '';
+    case false: return true;
+    case true: return true;
+    default: return false;
   }
 }
 
@@ -278,16 +274,12 @@ async function saveCell(employee, day, value) {
   isSaving.value = true;
   try {
     const date = dateKey(day);
-    const v = (value ?? '').toString();
+    const v = value ? '1' : '';
     console.log('[Schedule.saveCell]', { id: employee.id, date, shift: v });
     await api.schedule.saveShift(employee.id, date, v);
     console.log('[Schedule.saveCell] OK');
 
-    if (v === '') {
-      delete employee.schedule[day];
-    } else {
-      employee.schedule[day] = v;
-    }
+    employee.schedule[day] = value;
     recountEmployee(employee);
     editingCell.value = null;
   } catch (e) {
@@ -303,7 +295,7 @@ function recountEmployee(employee) {
   let days = 0;
   for (const day of Object.keys(employee.schedule)) {
     const shift = employee.schedule[day];
-    if (shift && shift !== '') {
+    if (shift) {
       days += 1;
       hours += 1;
     }
@@ -384,24 +376,24 @@ onMounted(async () => {
                   v-for="day in days"
                   :key="`${employee.id}-${day}`"
                   class="schedule-cell"
-                  :class="{ 'schedule-cell--editing': editingCell && editingCell.employeeId === employee.id && editingCell.day === day }"
-                  @click="!editingCell && startEditCell(employee, day)"
+                  :class="{
+                    'schedule-cell--working': getScheduleValue(employee, day),
+                    'schedule-cell--editing': editingCell && editingCell.employeeId === employee.id && editingCell.day === day
+                  }"
+                  @click="!editingCell && toggleShift(employee, day)"
                 >
                   <template v-if="editingCell && editingCell.employeeId === employee.id && editingCell.day === day">
                     <input
                       v-model="editingCell.value"
-                      type="text"
-                      maxlength="2"
-                      class="cell-input"
+                      type="checkbox"
+                      class="cell-checkbox"
                       :disabled="isSaving"
-                      @keydown.enter.prevent="saveCell(employee, day, editingCell.value)"
-                      @keydown.esc.prevent="cancelEditCell()"
-                      @blur="saveCell(employee, day, editingCell.value)"
+                      @change="saveCell(employee, day, editingCell.value)"
                       v-focus
                     />
                   </template>
                   <template v-else>
-                    {{ getScheduleValue(employee, day) }}
+                    <span class="cell-indicator" :class="{ 'cell-indicator--active': getScheduleValue(employee, day) }"></span>
                   </template>
                 </td>
                 <td class="hours-cell">{{ employee.hours.toFixed(1) }}</td>
@@ -430,12 +422,9 @@ onMounted(async () => {
 
     <div class="card">
       <div class="card-body legend-body">
-        <div class="legend-item"><span class="legend-label">1</span><span>— рабочий день</span></div>
-        <div class="legend-item"><span class="legend-label">к</span><span>— командировка</span></div>
-        <div class="legend-item"><span class="legend-label">Я</span><span>— отпуск</span></div>
-        <div class="legend-item"><span class="legend-label">о</span><span>— выходной</span></div>
+        <div class="legend-item"><span class="legend-label">☑</span><span>— рабочий день</span></div>
         <div class="legend-item text-muted">
-          <span>Клик по ячейке — изменить смену. Enter — сохранить, Esc — отменить.</span>
+          <span>Клик по ячейке — отметить/снять рабочий день.</span>
         </div>
       </div>
     </div>
@@ -574,17 +563,26 @@ onMounted(async () => {
   border-right: 2px solid var(--color-border);
 }
 .schedule-cell { min-width: 32px; cursor: pointer; }
-.schedule-cell:hover { background: #f1f5f9; }
+.schedule-cell:not(.schedule-cell--working):hover { background: #f1f5f9; }
+.schedule-cell--working:hover { background: rgba(59, 130, 246, 0.7); }
+.schedule-cell--working { background: var(--color-primary); }
 .schedule-cell--editing { padding: 0 !important; background: #fffbe6; }
-.cell-input {
-  width: 100%;
-  height: 100%;
-  border: 1px solid #f59e0b;
-  background: #fffbe6;
-  text-align: center;
-  font-size: 12px;
-  outline: none;
-  padding: 2px;
+.cell-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+  margin: 0;
+}
+.cell-indicator {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  background: transparent;
+  transition: all var(--transition);
+}
+.cell-indicator--active {
+  background: var(--color-primary);
 }
 .legend-body {
   display: flex;
