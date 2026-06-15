@@ -19,8 +19,11 @@ const weekDays = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
 const daysInMonth = new Date(year, month, 0).getDate();
 const modalInstance = ref(null);
 const modalEl = ref(null);
+const deleteModalInstance = ref(null);
+const deleteModalEl = ref(null);
 const employees = ref([]);
 const selectedEmployee = ref('');
+const employeeToDelete = ref(null);
 const isLoadingEmployees = ref(false);
 
 // В оригинале данные статические. Подменим под реальный список сотрудников,
@@ -44,15 +47,6 @@ async function loadEmployees() {
           position_name: pos?.name || '',
         };
       });
-    // сгенерируем пустые записи графика
-    scheduleData.value = employees.value.map((emp, idx) => ({
-      id: emp.id,
-      name: emp.fullName,
-      schedule: {},
-      hours: 0,
-      days: 0,
-      serviceType: idx === 0 ? 'Оптик-консультанты с 10.00 до 22.00' : 'Оптометристы с 10.00 до 20.00',
-    }));
   } finally {
     isLoadingEmployees.value = false;
   }
@@ -69,8 +63,55 @@ function closeModal() {
 
 function addRecord() {
   if (!selectedEmployee.value) return;
-  console.log('Добавить запись для сотрудника:', selectedEmployee.value);
+  
+  const employee = employees.value.find((e) => e.id === selectedEmployee.value);
+  if (!employee) return;
+  
+  // Проверяем, не добавлен ли уже этот сотрудник
+  if (scheduleData.value.some((item) => item.id === employee.id)) {
+    console.warn('Сотрудник уже добавлен в график');
+    closeModal();
+    return;
+  }
+  
+  // Добавляем нового сотрудника в график
+  scheduleData.value.push({
+    id: employee.id,
+    name: employee.fullName,
+    schedule: {},
+    hours: 0,
+    days: 0,
+    serviceType: employee.position_name || 'Без должности',
+  });
+  
   closeModal();
+}
+
+function removeRecord(employeeId) {
+  console.log('removeRecord вызвана для ID:', employeeId);
+  const employee = scheduleData.value.find((item) => item.id === employeeId);
+  console.log('Найден сотрудник:', employee);
+  if (employee) {
+    employeeToDelete.value = employee;
+    console.log('Открываем модальное окно удаления');
+    deleteModalInstance.value?.show();
+  }
+}
+
+function confirmDelete() {
+  if (!employeeToDelete.value) return;
+  
+  const index = scheduleData.value.findIndex((item) => item.id === employeeToDelete.value.id);
+  if (index !== -1) {
+    scheduleData.value.splice(index, 1);
+  }
+  
+  closeDeleteModal();
+}
+
+function closeDeleteModal() {
+  deleteModalInstance.value?.hide();
+  employeeToDelete.value = null;
 }
 
 function getDayOfWeek(day) {
@@ -94,6 +135,16 @@ onMounted(() => {
     // Очищаем форму при закрытии модального окна
     modalEl.value.addEventListener('hidden.bs.modal', () => {
       selectedEmployee.value = '';
+    });
+  }
+  
+  // Инициализируем модальное окно подтверждения удаления
+  if (deleteModalEl.value) {
+    deleteModalInstance.value = new Modal(deleteModalEl.value);
+    
+    // Очищаем данные при закрытии модального окна
+    deleteModalEl.value.addEventListener('hidden.bs.modal', () => {
+      employeeToDelete.value = null;
     });
   }
 });
@@ -124,11 +175,12 @@ onMounted(() => {
               </th>
               <th class="hours-column">Часы</th>
               <th class="days-column">Дни</th>
+              <th class="action-column"></th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="scheduleData.length > 0" class="service-type-row">
-              <td :colspan="daysInMonth + 3" class="service-type-cell">
+              <td :colspan="daysInMonth + 4" class="service-type-cell">
                 {{ scheduleData[0].serviceType }}
               </td>
             </tr>
@@ -139,9 +191,19 @@ onMounted(() => {
               </td>
               <td class="hours-cell">{{ employee.hours.toFixed(1) }}</td>
               <td class="days-cell">{{ employee.days }}</td>
+              <td class="action-cell">
+                <button 
+                  type="button"
+                  class="btn-delete" 
+                  @click.stop="removeRecord(employee.id)"
+                  title="Удалить из графика"
+                >
+                  ✕
+                </button>
+              </td>
             </tr>
             <tr v-if="scheduleData.length === 0">
-              <td :colspan="daysInMonth + 3" class="text-center text-muted" style="padding: 24px">
+              <td :colspan="daysInMonth + 4" class="text-center text-muted" style="padding: 24px">
                 Добавьте сотрудников в настройках, чтобы увидеть график
               </td>
             </tr>
@@ -188,6 +250,26 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- Модальное окно подтверждения удаления -->
+    <div ref="deleteModalEl" class="modal fade" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 id="deleteModalLabel" class="modal-title">Подтверждение удаления</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p>Вы уверены, что хотите удалить сотрудника <strong>{{ employeeToDelete?.name }}</strong> из графика?</p>
+            <p class="text-muted mb-0">Все данные графика для этого сотрудника будут потеряны.</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+            <button type="button" class="btn btn-danger" @click="confirmDelete">Удалить</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -230,6 +312,32 @@ onMounted(() => {
 .day-number { font-weight: 600; }
 .day-of-week { font-size: 10px; color: var(--color-muted); }
 .hours-column, .days-column { min-width: 60px; background: #f8fafc; }
+.action-column {
+  min-width: 50px;
+  background: #f8fafc;
+}
+.action-cell {
+  text-align: center;
+  padding: 4px !important;
+  position: relative;
+}
+.btn-delete {
+  position: relative;
+  z-index: 10;
+  background: transparent;
+  border: none;
+  color: #dc3545;
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+.btn-delete:hover {
+  background: #fee;
+  color: #c82333;
+}
 .service-type-cell {
   text-align: left !important;
   font-style: italic;
