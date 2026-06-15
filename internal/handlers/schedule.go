@@ -17,10 +17,43 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 
 	"OpticERP/internal/db"
 	"OpticERP/internal/models"
 )
+
+// parseScheduleMonth вытаскивает год и месяц из даты YYYY-MM-DD.
+func parseScheduleMonth(date string) (int64, int64, error) {
+	parts := strings.Split(date, "-")
+	if len(parts) < 2 {
+		return 0, 0, fmt.Errorf("некорректная дата графика: %q", date)
+	}
+	year, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return 0, 0, fmt.Errorf("некорректный год графика: %q", date)
+	}
+	month, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil || month < 1 || month > 12 {
+		return 0, 0, fmt.Errorf("некорректный месяц графика: %q", date)
+	}
+	return year, month, nil
+}
+
+func staffExists(conn *sql.DB, userID int64) error {
+	if userID <= 0 {
+		return errors.New("user_id должен быть положительным")
+	}
+	var exists int64
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM staff WHERE id = ?`, userID).Scan(&exists); err != nil {
+		return fmt.Errorf("ошибка проверки сотрудника: %w", err)
+	}
+	if exists == 0 {
+		return fmt.Errorf("сотрудник с id=%d не найден", userID)
+	}
+	return nil
+}
 
 // GetSchedule возвращает все записи графика, опционально фильтруя по
 // диапазону дат (в формате YYYY-MM-DD включительно). Если from/to пустые —
@@ -66,6 +99,52 @@ func GetSchedule(from, to string) ([]models.Schedule, error) {
 	return result, rows.Err()
 }
 
+// GetScheduleMembers возвращает id сотрудников, явно добавленных в график месяца.
+func GetScheduleMembers(year, month int64) ([]int64, error) {
+	conn, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
+	rows, err := conn.Query(`SELECT user_id FROM schedule_members WHERE year = ? AND month = ? ORDER BY user_id`, year, month)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка чтения сотрудников графика: %w", err)
+	}
+	defer rows.Close()
+
+	result := make([]int64, 0)
+	for rows.Next() {
+		var userID int64
+		if err := rows.Scan(&userID); err != nil {
+			return nil, fmt.Errorf("ошибка сканирования сотрудника графика: %w", err)
+		}
+		result = append(result, userID)
+	}
+	return result, rows.Err()
+}
+
+// AddScheduleMember сохраняет факт добавления сотрудника в график месяца.
+func AddScheduleMember(userID, year, month int64) (bool, error) {
+	conn, err := db.DB()
+	if err != nil {
+		return false, err
+	}
+	if err := staffExists(conn, userID); err != nil {
+		return false, err
+	}
+	if year <= 0 || month < 1 || month > 12 {
+		return false, errors.New("некорректный месяц графика")
+	}
+	_, err = conn.Exec(`
+		INSERT INTO schedule_members (user_id, year, month)
+		VALUES (?, ?, ?)
+		ON CONFLICT(user_id, year, month) DO NOTHING
+	`, userID, year, month)
+	if err != nil {
+		return false, fmt.Errorf("ошибка добавления сотрудника в график: %w", err)
+	}
+	return true, nil
+}
+
 // UpsertSchedule создаёт или обновляет запись графика (user_id, date).
 // Если shift == "" — запись удаляется (логика "пустая ячейка = выходной,
 // строку не храним"). Возвращает true, если запись фактически сохранена.
@@ -75,19 +154,16 @@ func UpsertSchedule(userID int64, date, shift string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if userID <= 0 {
-		return false, errors.New("user_id должен быть положительным")
-	}
 	if date == "" {
 		return false, errors.New("дата не может быть пустой")
 	}
-	// Проверяем, что сотрудник существует (FK на staff).
-	var exists int64
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM staff WHERE id = ?`, userID).Scan(&exists); err != nil {
-		return false, fmt.Errorf("ошибка проверки сотрудника: %w", err)
+	if err := staffExists(conn, userID); err != nil {
+		return false, err
 	}
-	if exists == 0 {
-		return false, fmt.Errorf("сотрудник с id=%d не найден", userID)
+	if year, month, err := parseScheduleMonth(date); err == nil {
+		if _, err := AddScheduleMember(userID, year, month); err != nil {
+			return false, err
+		}
 	}
 
 	// Пустая смена = удаляем строку, чтобы таблица не пухла.
@@ -162,6 +238,9 @@ func DeleteScheduleForUser(userID int64) (bool, error) {
 	res, err := conn.Exec(`DELETE FROM schedule WHERE user_id = ?`, userID)
 	if err != nil {
 		return false, fmt.Errorf("ошибка очистки графика сотрудника: %w", err)
+	}
+	if _, err := conn.Exec(`DELETE FROM schedule_members WHERE user_id = ?`, userID); err != nil {
+		return false, fmt.Errorf("ошибка удаления сотрудника из графика: %w", err)
 	}
 	n, _ := res.RowsAffected()
 	return n > 0, nil

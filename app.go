@@ -79,6 +79,16 @@ func (a *App) GetSchedule(from string, to string) ([]models.Schedule, error) {
 	return handlers.GetSchedule(from, to)
 }
 
+// GetScheduleMembers — получить сотрудников, добавленных в график месяца.
+func (a *App) GetScheduleMembers(year int64, month int64) ([]int64, error) {
+	return handlers.GetScheduleMembers(year, month)
+}
+
+// AddScheduleMember — добавить сотрудника в график месяца без обязательной смены.
+func (a *App) AddScheduleMember(userId int64, year int64, month int64) (bool, error) {
+	return handlers.AddScheduleMember(userId, year, month)
+}
+
 // SaveScheduleShift — сохранить/обновить смену сотрудника на дату.
 // При shift == "" запись удаляется (логика пустой ячейки).
 // Возвращает true, если строка реально записана или удалена.

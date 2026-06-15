@@ -73,6 +73,17 @@ func Migrate(conn *sql.DB) error {
 			shift TEXT NOT NULL,
 			FOREIGN KEY (user_id) REFERENCES staff(id)
 		)`,
+		// schedule_members хранит сам факт добавления сотрудника в график
+		// месяца. Смены по дням остаются в schedule, а пустой график не
+		// исчезает после перезагрузки.
+		`CREATE TABLE IF NOT EXISTS schedule_members (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id INTEGER NOT NULL,
+			year INTEGER NOT NULL,
+			month INTEGER NOT NULL,
+			created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+			FOREIGN KEY (user_id) REFERENCES staff(id)
+		)`,
 		// bonuses
 		`CREATE TABLE IF NOT EXISTS bonuses (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -168,6 +179,7 @@ func Migrate(conn *sql.DB) error {
 	// запрещает дублирующиеся записи на одного сотрудника в один день.
 	stmts = append(stmts,
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_schedule_user_date ON schedule(user_id, date)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_schedule_members_user_month ON schedule_members(user_id, year, month)`,
 	)
 
 	for _, s := range stmts {

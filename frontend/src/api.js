@@ -11,6 +11,8 @@ import {
   UpdateStaff,
   DeleteStaff,
   GetSchedule,
+  GetScheduleMembers,
+  AddScheduleMember,
   SaveScheduleShift,
   DeleteScheduleRecord,
   DeleteScheduleForUser,
@@ -36,6 +38,8 @@ export const api = {
   // (запись в БД удаляется).
   schedule: {
     list: (from, to) => GetSchedule(from ?? '', to ?? ''),
+    members: (year, month) => GetScheduleMembers(year, month),
+    addMember: (userId, year, month) => AddScheduleMember(userId, year, month),
     saveShift: (userId, date, shift) => SaveScheduleShift(userId, date, shift),
     remove: (userId, date) => DeleteScheduleRecord(userId, date),
     clearForUser: (userId) => DeleteScheduleForUser(userId),

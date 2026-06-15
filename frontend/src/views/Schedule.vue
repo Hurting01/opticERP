@@ -110,8 +110,12 @@ async function loadSchedule() {
   isLoadingSchedule.value = true;
   try {
     const { from, to } = monthRange();
-    const rows = await api.schedule.list(from, to);
+    const [rows, members] = await Promise.all([
+      api.schedule.list(from, to),
+      api.schedule.members(year, month),
+    ]);
     const safeRows = Array.isArray(rows) ? rows : [];
+    const memberIds = new Set(Array.isArray(members) ? members : []);
 
     // Сгруппируем по user_id, чтобы быстро отрисовать.
     // map: user_id -> { [day(int)]: shift }
@@ -131,8 +135,8 @@ async function loadSchedule() {
     const result = [];
     for (const emp of employees.value) {
       const days = byUser.get(emp.id);
-      if (!days) continue;
-      result.push(buildEmployeeRow(emp, days));
+      if (!days && !memberIds.has(emp.id)) continue;
+      result.push(buildEmployeeRow(emp, days || {}));
     }
     scheduleData.value = result;
   } catch (e) {
@@ -187,15 +191,21 @@ async function addRecord() {
     return;
   }
 
-  scheduleData.value.push({
-    id: employee.id,
-    name: employee.fullName,
-    schedule: {},
-    hours: 0,
-    days: 0,
-    serviceType: employee.position_name || 'Без должности',
-  });
-  closeModal();
+  try {
+    await api.schedule.addMember(employee.id, year, month);
+    scheduleData.value.push({
+      id: employee.id,
+      name: employee.fullName,
+      schedule: {},
+      hours: 0,
+      days: 0,
+      serviceType: employee.position_name || 'Без должности',
+    });
+    closeModal();
+  } catch (e) {
+    lastError.value = `Ошибка добавления сотрудника в график: ${e?.message || e}`;
+    console.error(lastError.value);
+  }
 }
 
 function removeRecord(employeeId) {
