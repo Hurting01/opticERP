@@ -24,7 +24,8 @@ func GetPositions() ([]models.Position, error) {
 	}
 	defer rows.Close()
 
-	var result []models.Position
+	// Инициализируем пустым слайсом, чтобы в JSON уехал [] (а не null).
+	result := make([]models.Position, 0)
 	for rows.Next() {
 		var p models.Position
 		var nh, sal sql.NullInt64

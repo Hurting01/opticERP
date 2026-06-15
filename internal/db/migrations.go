@@ -163,6 +163,13 @@ func Migrate(conn *sql.DB) error {
 		)`,
 	}
 
+	// Уникальный индекс для пары (user_id, date) — обеспечивает
+	// идемпотентный upsert в schedule (см. handlers.UpsertSchedule) и
+	// запрещает дублирующиеся записи на одного сотрудника в один день.
+	stmts = append(stmts,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_schedule_user_date ON schedule(user_id, date)`,
+	)
+
 	for _, s := range stmts {
 		if _, err := conn.Exec(s); err != nil {
 			return fmt.Errorf("ошибка миграции: %w\nSQL: %s", err, s)

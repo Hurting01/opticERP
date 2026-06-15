@@ -25,7 +25,9 @@ func GetStaff() ([]models.StaffWithPosition, error) {
 	}
 	defer rows.Close()
 
-	var result []models.StaffWithPosition
+	// Инициализируем пустым слайсом, чтобы в JSON уехал [] (а не null).
+	// Иначе на фронте .filter/.map падают на null.
+	result := make([]models.StaffWithPosition, 0)
 	for rows.Next() {
 		var s models.StaffWithPosition
 		if err := rows.Scan(&s.ID, &s.FullName, &s.PositionID, &s.IsActive, &s.CreatedAt, &s.PositionName); err != nil {

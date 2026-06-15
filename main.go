@@ -25,11 +25,11 @@ func main() {
 	// пользователь увидит проблему в логах / на пустых списках.
 	conn, err := db.DB()
 	if err != nil {
-		log.Printf("⚠️  Не удалось подключиться к БД: %v", err)
+		log.Printf("⚠️  Не удалось подключиться к БД (%s): %v", db.DBPath(), err)
 	} else if err := db.Migrate(conn); err != nil {
-		log.Printf("⚠️  Ошибка миграции: %v", err)
+		log.Printf("⚠️  Ошибка миграции (%s): %v", db.DBPath(), err)
 	} else {
-		log.Println("✅ БД инициализирована")
+		log.Printf("✅ БД инициализирована: %s", db.DBPath())
 	}
 
 	app := NewApp()

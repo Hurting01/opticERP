@@ -8,13 +8,21 @@ export function CreateStaff(arg1:string,arg2:number):Promise<models.StaffWithPos
 
 export function DeletePosition(arg1:number):Promise<boolean>;
 
+export function DeleteScheduleForUser(arg1:number):Promise<boolean>;
+
+export function DeleteScheduleRecord(arg1:number,arg2:string):Promise<boolean>;
+
 export function DeleteStaff(arg1:number):Promise<boolean>;
 
 export function GetPositions():Promise<Array<models.Position>>;
 
+export function GetSchedule(arg1:string,arg2:string):Promise<Array<models.Schedule>>;
+
 export function GetStaff():Promise<Array<models.StaffWithPosition>>;
 
 export function Greet(arg1:string):Promise<string>;
+
+export function SaveScheduleShift(arg1:number,arg2:string,arg3:string):Promise<boolean>;
 
 export function UpdatePosition(arg1:number,arg2:string,arg3:any,arg4:any,arg5:any,arg6:any):Promise<models.Position>;
 

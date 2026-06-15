@@ -24,6 +24,24 @@ export namespace models {
 	        this.additional_payments = source["additional_payments"];
 	    }
 	}
+	export class Schedule {
+	    id: number;
+	    user_id: number;
+	    date: string;
+	    shift: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Schedule(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.user_id = source["user_id"];
+	        this.date = source["date"];
+	        this.shift = source["shift"];
+	    }
+	}
 	export class StaffWithPosition {
 	    id: number;
 	    full_name: string;

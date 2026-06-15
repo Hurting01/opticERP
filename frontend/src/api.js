@@ -10,6 +10,10 @@ import {
   CreateStaff,
   UpdateStaff,
   DeleteStaff,
+  GetSchedule,
+  SaveScheduleShift,
+  DeleteScheduleRecord,
+  DeleteScheduleForUser,
 } from '../wailsjs/go/main/App';
 
 export const api = {
@@ -26,6 +30,15 @@ export const api = {
     create: (fullName, positionId) => CreateStaff(fullName, positionId),
     update: (staffId, newFullName, newPositionId) => UpdateStaff(staffId, newFullName, newPositionId),
     remove: (staffId) => DeleteStaff(staffId),
+  },
+  // Работа с графиком сотрудников. Дата — строка YYYY-MM-DD.
+  // shift — код смены ('1' / 'к' / 'Я' / 'о' / ''). Пустая строка = выходной
+  // (запись в БД удаляется).
+  schedule: {
+    list: (from, to) => GetSchedule(from ?? '', to ?? ''),
+    saveShift: (userId, date, shift) => SaveScheduleShift(userId, date, shift),
+    remove: (userId, date) => DeleteScheduleRecord(userId, date),
+    clearForUser: (userId) => DeleteScheduleForUser(userId),
   },
 };
 

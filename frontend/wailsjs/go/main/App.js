@@ -14,6 +14,14 @@ export function DeletePosition(arg1) {
   return window['go']['main']['App']['DeletePosition'](arg1);
 }
 
+export function DeleteScheduleForUser(arg1) {
+  return window['go']['main']['App']['DeleteScheduleForUser'](arg1);
+}
+
+export function DeleteScheduleRecord(arg1, arg2) {
+  return window['go']['main']['App']['DeleteScheduleRecord'](arg1, arg2);
+}
+
 export function DeleteStaff(arg1) {
   return window['go']['main']['App']['DeleteStaff'](arg1);
 }
@@ -22,12 +30,20 @@ export function GetPositions() {
   return window['go']['main']['App']['GetPositions']();
 }
 
+export function GetSchedule(arg1, arg2) {
+  return window['go']['main']['App']['GetSchedule'](arg1, arg2);
+}
+
 export function GetStaff() {
   return window['go']['main']['App']['GetStaff']();
 }
 
 export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
+}
+
+export function SaveScheduleShift(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SaveScheduleShift'](arg1, arg2, arg3);
 }
 
 export function UpdatePosition(arg1, arg2, arg3, arg4, arg5, arg6) {

@@ -70,6 +70,33 @@ func (a *App) DeleteStaff(staffId int64) (bool, error) {
 	return handlers.DeleteStaff(staffId)
 }
 
+// === График (расписание) ===
+
+// GetSchedule — получить записи графика. Опционально фильтрует по
+// диапазону дат YYYY-MM-DD (from, to включительно). Если строки пустые —
+// возвращается весь график.
+func (a *App) GetSchedule(from string, to string) ([]models.Schedule, error) {
+	return handlers.GetSchedule(from, to)
+}
+
+// SaveScheduleShift — сохранить/обновить смену сотрудника на дату.
+// При shift == "" запись удаляется (логика пустой ячейки).
+// Возвращает true, если строка реально записана или удалена.
+func (a *App) SaveScheduleShift(userId int64, date string, shift string) (bool, error) {
+	return handlers.UpsertSchedule(userId, date, shift)
+}
+
+// DeleteScheduleRecord — удалить конкретную запись (user_id, date).
+func (a *App) DeleteScheduleRecord(userId int64, date string) (bool, error) {
+	return handlers.DeleteSchedule(userId, date)
+}
+
+// DeleteScheduleForUser — очистить весь график сотрудника
+// (например, при его удалении из настроек).
+func (a *App) DeleteScheduleForUser(userId int64) (bool, error) {
+	return handlers.DeleteScheduleForUser(userId)
+}
+
 // === Сервисная команда (использовалась в Tauri-версии для проверки IPC) ===
 
 // Greet возвращает приветствие. Оставлено для отладки/обратной совместимости.

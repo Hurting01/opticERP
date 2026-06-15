@@ -66,19 +66,63 @@ func DB() (*sql.DB, error) {
 	return dbConn, dbErr
 }
 
-// DBPath возвращает абсолютный путь к erp.db рядом с исполняемым файлом.
-// Если по какой-то причине нельзя определить путь к exe (например, в
-// тестах под go run), откатываемся на текущую рабочую директорию.
+// DBPath возвращает путь к erp.db.
+//
+// По требованию проекта БД должна лежать в корне репозитория
+// (рядом с go.mod), чтобы её удобно было открывать в IDE/расширениях
+// и держать в git-ignore. То есть:
+//
+//	f:\OpticERP\erp.db
+//
+// Эта логика совпадает с поведением оригинальной Tauri-версии, где
+// Cargo-бинарь собирался в корень проекта и erp.db создавалась рядом.
+//
+// Приоритеты:
+//  1. Переменная окружения OPTICERP_DB_PATH — для тестов и отладки.
+//  2. <корень проекта>/erp.db — определяется по наличию go.mod в
+//     текущей рабочей директории или её родителях. Это нужно, потому
+//     что в `wails dev` рабочая директория обычно равна `frontend/`,
+//     а exe — `build/bin/OpticERP.exe`. Идём вверх по дереву, пока не
+//     найдём go.mod.
+//  3. Фоллбэк — текущая рабочая директория.
 func DBPath() string {
-	if exe, err := os.Executable(); err == nil && exe != "" {
-		dir := filepath.Dir(exe)
-		if dir != "" {
-			return filepath.Join(dir, "erp.db")
-		}
+	if envPath := os.Getenv("OPTICERP_DB_PATH"); envPath != "" {
+		return envPath
+	}
+	if projectRoot := findProjectRoot(); projectRoot != "" {
+		return filepath.Join(projectRoot, "erp.db")
 	}
 	wd, err := os.Getwd()
 	if err != nil {
 		wd = "."
 	}
 	return filepath.Join(wd, "erp.db")
+}
+
+// findProjectRoot поднимается вверх по дереву директорий от текущей
+// рабочей директории (или от директории exe, если она задана) и
+// возвращает путь к директории, содержащей go.mod. Если ничего не
+// найдено — возвращает пустую строку.
+func findProjectRoot() string {
+	candidates := []string{}
+	if wd, err := os.Getwd(); err == nil && wd != "" {
+		candidates = append(candidates, wd)
+	}
+	if exe, err := os.Executable(); err == nil && exe != "" {
+		candidates = append(candidates, filepath.Dir(exe))
+	}
+	for _, start := range candidates {
+		dir := start
+		for i := 0; i < 8; i++ {
+			if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+				return dir
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+	}
+	return ""
 }
