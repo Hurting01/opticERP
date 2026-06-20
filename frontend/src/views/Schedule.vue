@@ -50,6 +50,36 @@ const lastError = ref('');
 // Каждый элемент: { id, name, position, position_name, schedule: { [day]: shift }, hours, days, serviceType }
 const scheduleData = ref([]);
 
+// Группировка сотрудников по должностям для отображения.
+// Источник истины — поле position_name, которое бэкенд уже подтянул через
+// LEFT JOIN positions в handlers.GetStaff. Если оно пустое (сотрудник
+// создан без должности или с невалидным position_id), попадает в г��уппу
+// «Без должности». Группы сортируются по алфавиту для стабильного порядка.
+const groupedData = computed(() => {
+  const groups = new Map();
+
+  for (const employee of scheduleData.value) {
+    // Берём должность в порядке приоритета: position_name (от бэкенда) →
+    // position (локальный fallback из loadEmployees). Если ничего нет —
+    // честно пишем «Без должности».
+    const rawName = (employee.position_name || employee.position || '').trim();
+    const positionName = rawName || 'Без должности';
+
+    if (!groups.has(positionName)) {
+      groups.set(positionName, {
+        position: positionName,
+        employees: [],
+      });
+    }
+    groups.get(positionName).employees.push(employee);
+  }
+
+  // Возвращаем массив, отсортированный по названию должности.
+  return Array.from(groups.values()).sort((a, b) =>
+    a.position.localeCompare(b.position, 'ru', { sensitivity: 'base' })
+  );
+});
+
 // Редактируемая в данный момент ячейка: { employeeId, day, value, dirty }
 const editingCell = ref(null);
 const isSaving = ref(false);
@@ -71,13 +101,18 @@ async function loadEmployees() {
     employees.value = safeStaff
       .filter((e) => e.is_active !== 0)
       .map((e) => {
+        // Бэкенд уже подтянул position_name через LEFT JOIN positions.
+        // Используем его напрямую. Локальный поиск — лишь фолбэк,
+        // если бэкенд вдруг вернул пустое (например, для устаревшего
+        // сотрудника без должности).
         const pos = safePositions.find((p) => p.id === e.position_id);
+        const positionName = e.position_name || pos?.name || '';
         return {
           ...e,
           fullName: e.full_name,
           isActive: e.is_active !== 0,
-          position: pos?.name || '',
-          position_name: pos?.name || '',
+          position: positionName,
+          position_name: positionName,
         };
       });
   } catch (e) {
@@ -118,14 +153,18 @@ async function loadSchedule() {
     const memberIds = new Set(Array.isArray(members) ? members : []);
 
     // Сгруппируем по user_id, чтобы быстро отрисовать.
-    // map: user_id -> { [day(int)]: shift }
+    // map: user_id -> { [day(int)]: { shift, hours, is_working_day } }
     const byUser = new Map();
     for (const r of safeRows) {
       const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(r.date || '');
       if (!m) continue;
       const d = parseInt(m[3], 10);
       if (!byUser.has(r.user_id)) byUser.set(r.user_id, {});
-      byUser.get(r.user_id)[d] = r.shift;
+      byUser.get(r.user_id)[d] = {
+        shift: r.shift,
+        hours: r.hours,
+        is_working_day: r.is_working_day
+      };
     }
 
     // Показываем только тех сотрудников, у которых есть хотя бы одна
@@ -150,22 +189,27 @@ async function loadSchedule() {
 function buildEmployeeRow(emp, daysMap) {
   let hours = 0;
   let days = 0;
-  for (const day of Object.keys(daysMap)) {
-    const shift = daysMap[day];
-    if (shift && shift !== '') {
+  for (const day in daysMap) {
+    const data = daysMap[day];
+    if (data.is_working_day) {
       days += 1;
-      // 1 смена = 1 условный час. Точную конвертацию можно вынести в
-      // настройки должности (Position.hours_per_shift) позже.
-      hours += 1;
+      // Берём hours из БД (он приходит из positions.hours_per_shift).
+      // Если 0 — пропускаем, чтобы не считать «пустые» рабочие дни.
+      hours += data.hours || 0;
     }
   }
+  // emp уже содержит position_name (его выставил loadEmployees из бэкенда).
+  // На всякий случай берём фолбэки: position → serviceType.
+  const positionName = (emp.position_name || emp.position || '').trim() || 'Без должности';
   return {
     id: emp.id,
     name: emp.fullName,
+    position: positionName,
+    position_name: positionName,
     schedule: { ...daysMap },
     hours,
     days,
-    serviceType: emp.position_name || 'Без должности',
+    serviceType: positionName,
   };
 }
 
@@ -193,13 +237,16 @@ async function addRecord() {
 
   try {
     await api.schedule.addMember(employee.id, year, month);
+    const positionName = (employee.position_name || employee.position || '').trim() || 'Без должности';
     scheduleData.value.push({
       id: employee.id,
       name: employee.fullName,
+      position: positionName,
+      position_name: positionName,
       schedule: {},
       hours: 0,
       days: 0,
-      serviceType: employee.position_name || 'Без должности',
+      serviceType: positionName,
     });
     closeModal();
   } catch (e) {
@@ -269,18 +316,66 @@ function presetCycle(current) {
   }
 }
 
+// refreshEmployeeRow перезагружает данные по сотруднику из БД и
+// обновляет локальный scheduleData. Используется после сохранения
+// смены, чтобы подтянуть актуальный hours (он берётся бэкендом из
+// positions.hours_per_shift текущей должности сотрудника).
+async function refreshEmployeeRow(employeeId) {
+  try {
+    const { from, to } = monthRange();
+    const rows = await api.schedule.list(from, to);
+    const safeRows = Array.isArray(rows) ? rows : [];
+    const employee = scheduleData.value.find((e) => e.id === employeeId);
+    if (!employee) return;
+
+    const newDays = {};
+    for (const r of safeRows) {
+      if (r.user_id !== employeeId) continue;
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(r.date || '');
+      if (!m) continue;
+      const d = parseInt(m[3], 10);
+      newDays[d] = {
+        shift: r.shift,
+        hours: r.hours,
+        is_working_day: r.is_working_day
+      };
+    }
+    employee.schedule = newDays;
+
+    let totalHours = 0;
+    let totalDays = 0;
+    for (const d in newDays) {
+      const data = newDays[d];
+      if (data && data.is_working_day) {
+        totalDays += 1;
+        totalHours += data.hours || 0;
+      }
+    }
+    employee.hours = totalHours;
+    employee.days = totalDays;
+  } catch (e) {
+    console.error('[Schedule.refreshEmployeeRow]', e?.message || e);
+  }
+}
+
 async function saveCell(employee, day, value) {
   if (isSaving.value) return;
   isSaving.value = true;
   try {
     const date = dateKey(day);
     const v = value ? '1' : '';
-    console.log('[Schedule.saveCell]', { id: employee.id, date, shift: v });
-    await api.schedule.saveShift(employee.id, date, v);
+    const isWorkingDay = value;
+
+    // hours не передаём как реальный норматив — фронт его не знает.
+    // Бэкенд игнорирует переданный hours и сам подтягивает значение
+    // из positions.hours_per_shift текущей должности сотрудника.
+    console.log('[Schedule.saveCell]', { id: employee.id, date, shift: v, isWorkingDay });
+    await api.schedule.saveShift(employee.id, date, v, 0, isWorkingDay);
     console.log('[Schedule.saveCell] OK');
 
-    employee.schedule[day] = value;
-    recountEmployee(employee);
+    // Подтягиваем актуальные данные из БД (включая hours из positions).
+    await refreshEmployeeRow(employee.id);
+
     editingCell.value = null;
   } catch (e) {
     lastError.value = `Не удалось сохранить смену: ${e?.message || e}`;
@@ -291,17 +386,7 @@ async function saveCell(employee, day, value) {
 }
 
 function recountEmployee(employee) {
-  let hours = 0;
-  let days = 0;
-  for (const day of Object.keys(employee.schedule)) {
-    const shift = employee.schedule[day];
-    if (shift) {
-      days += 1;
-      hours += 1;
-    }
-  }
-  employee.hours = hours;
-  employee.days = days;
+  // Этот метод больше не нужен, так как hours и days уже считаются из БД
 }
 
 const days = computed(() => Array.from({ length: daysInMonth }, (_, i) => i + 1));
@@ -337,7 +422,7 @@ onMounted(async () => {
     <div class="card">
       <div class="card-body py-3">
         <div class="d-flex justify-content-between align-items-center">
-          <h1 class="page-title">График — {{ monthNames[month - 1] }} {{ year }}</h1>
+          <h1 class="page-title">{{ monthNames[month - 1] }} {{ year }}</h1>
           <button class="btn btn-primary" @click="openModal">+ Добавить запись</button>
         </div>
       </div>
@@ -348,7 +433,7 @@ onMounted(async () => {
         <table class="schedule-table">
           <thead>
             <tr class="header-row">
-              <th class="name-column"><span class="month-label">{{ monthNames[month - 1] }}</span></th>
+              <th class="name-column"><span class="month-label">ФИО/Даты</span></th>
               <th v-for="day in days" :key="day" class="day-header">
                 <div class="day-number">{{ day }}</div>
                 <div class="day-of-week">{{ getDayOfWeek(day) }}</div>
@@ -365,50 +450,55 @@ onMounted(async () => {
               </td>
             </tr>
             <template v-else>
-              <tr v-if="scheduleData.length > 0" class="service-type-row">
-                <td :colspan="daysInMonth + 4" class="service-type-cell">
-                  {{ scheduleData[0].serviceType }}
-                </td>
-              </tr>
-              <tr v-for="employee in scheduleData" :key="employee.id" class="employee-row">
-                <td class="employee-name">{{ employee.name }}</td>
-                <td
-                  v-for="day in days"
-                  :key="`${employee.id}-${day}`"
-                  class="schedule-cell"
-                  :class="{
-                    'schedule-cell--working': getScheduleValue(employee, day),
-                    'schedule-cell--editing': editingCell && editingCell.employeeId === employee.id && editingCell.day === day
-                  }"
-                  @click="!editingCell && toggleShift(employee, day)"
-                >
-                  <template v-if="editingCell && editingCell.employeeId === employee.id && editingCell.day === day">
-                    <input
-                      v-model="editingCell.value"
-                      type="checkbox"
-                      class="cell-checkbox"
-                      :disabled="isSaving"
-                      @change="saveCell(employee, day, editingCell.value)"
-                      v-focus
-                    />
-                  </template>
-                  <template v-else>
-                    <span class="cell-indicator" :class="{ 'cell-indicator--active': getScheduleValue(employee, day) }"></span>
-                  </template>
-                </td>
-                <td class="hours-cell">{{ employee.hours.toFixed(1) }}</td>
-                <td class="days-cell">{{ employee.days }}</td>
-                <td class="action-cell">
-                  <button
-                    type="button"
-                    class="btn-delete"
-                    @click.stop="removeRecord(employee.id)"
-                    title="Удалить из графика"
+              <!-- Для каждой должности — сначала ��апка с её назв��нием, ниже — сотрудники. -->
+              <template v-for="group in groupedData" :key="group.position">
+                <tr class="position-header-row">
+                  <td :colspan="daysInMonth + 4" class="position-header-cell">
+                    {{ group.position }}
+                  </td>
+                </tr>
+
+                <!-- Сотрудники этой должности -->
+                <tr v-for="employee in group.employees" :key="employee.id" class="employee-row">
+                  <td class="employee-name">{{ employee.name }}</td>
+                  <td
+                    v-for="day in days"
+                    :key="`${employee.id}-${day}`"
+                    class="schedule-cell"
+                    :class="{
+                      'schedule-cell--working': getScheduleValue(employee, day),
+                      'schedule-cell--editing': editingCell && editingCell.employeeId === employee.id && editingCell.day === day
+                    }"
+                    @click="!editingCell && toggleShift(employee, day)"
                   >
-                    ✕
-                  </button>
-                </td>
-              </tr>
+                    <template v-if="editingCell && editingCell.employeeId === employee.id && editingCell.day === day">
+                      <input
+                        v-model="editingCell.value"
+                        type="checkbox"
+                        class="cell-checkbox"
+                        :disabled="isSaving"
+                        @change="saveCell(employee, day, editingCell.value)"
+                        v-focus
+                      />
+                    </template>
+                    <template v-else>
+                      <span class="cell-indicator" :class="{ 'cell-indicator--active': getScheduleValue(employee, day) }"></span>
+                    </template>
+                  </td>
+                  <td class="hours-cell">{{ employee.hours.toFixed(1) }}</td>
+                  <td class="days-cell">{{ employee.days }}</td>
+                  <td class="action-cell">
+                    <button
+                      type="button"
+                      class="btn-delete"
+                      @click.stop="removeRecord(employee.id)"
+                      title="Удалить из графика"
+                    >
+                      ✕
+                    </button>
+                  </td>
+                </tr>
+              </template>
               <tr v-if="scheduleData.length === 0 && !isLoadingSchedule">
                 <td :colspan="daysInMonth + 4" class="text-center text-muted" style="padding: 24px">
                   Добавьте сотрудников, чтобы увидеть график
@@ -546,10 +636,11 @@ onMounted(async () => {
   background: #fee;
   color: #c82333;
 }
-.service-type-cell {
+.position-header-cell {
   text-align: left !important;
-  font-style: italic;
-  padding: 6px 12px !important;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 8px 12px !important;
   color: var(--color-muted);
   background: #fafbfc;
 }

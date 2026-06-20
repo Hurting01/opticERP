@@ -66,11 +66,14 @@ func Migrate(conn *sql.DB) error {
 			created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 		)`,
 		// schedule
+		// hours берётся из positions.hours_per_shift (должности сотрудника).
 		`CREATE TABLE IF NOT EXISTS schedule (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			user_id INTEGER NOT NULL,
 			date TEXT NOT NULL,
 			shift TEXT NOT NULL,
+			hours REAL DEFAULT 0,
+			is_working_day INTEGER DEFAULT 1,
 			FOREIGN KEY (user_id) REFERENCES staff(id)
 		)`,
 		// schedule_members хранит сам факт добавления сотрудника в график
@@ -182,6 +185,15 @@ func Migrate(conn *sql.DB) error {
 		`CREATE UNIQUE INDEX IF NOT EXISTS idx_schedule_members_user_month ON schedule_members(user_id, year, month)`,
 	)
 
+	// Миграция для добавления новых полей в существующую таблицу schedule
+	// (простая добавка, если поля отсутствуют)
+	if columnExists, _ := hasColumn(conn, "schedule", "hours"); !columnExists {
+		_, _ = conn.Exec(`ALTER TABLE schedule ADD COLUMN hours REAL DEFAULT 0`)
+	}
+	if columnExists, _ := hasColumn(conn, "schedule", "is_working_day"); !columnExists {
+		_, _ = conn.Exec(`ALTER TABLE schedule ADD COLUMN is_working_day INTEGER DEFAULT 1`)
+	}
+
 	for _, s := range stmts {
 		if _, err := conn.Exec(s); err != nil {
 			return fmt.Errorf("ошибка миграции: %w\nSQL: %s", err, s)
@@ -210,6 +222,76 @@ func Migrate(conn *sql.DB) error {
 		return fmt.Errorf("ошибка создания таблицы staff: %w", err)
 	}
 
+	// === Миграция данных: hours_per_shift → schedule.hours ===
+	// После того как schedule начал хранить hours, нужно пересчитать уже
+	// сохранённые записи по текущим должностям сотрудников. Записи,
+	// у которых hours == 0 или hours == 1 (исторические захардкоженные
+	// значения из старой версии фронта), обновляются на hours_per_shift
+	// текущей должности сотрудника; если должность не назначена или
+	// hours_per_shift = NULL — используется дефолт 12.
+	if hasTableSchedule, _ := hasTable(conn, "schedule"); hasTableSchedule {
+		if err := migrateScheduleHoursFromPositions(conn); err != nil {
+			return fmt.Errorf("ошибка миграции schedule.hours: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// migrateScheduleHoursFromPositions пересчитывает hours во всех записях
+// schedule, подтягивая hours_per_shift из positions. Запускается один
+// раз при миграции — после неё фронт и хендлеры пишут hours напрямую.
+//
+// Логика:
+//   - для каждой записи schedule берём hours_per_shift текущей должности
+//     сотрудника (через staff → positions),
+//   - если значение NULL или <= 0 — используем дефолт 12,
+//   - обновляем только записи, у которых is_working_day = 1 (выходные
+//     остаются без часов).
+func migrateScheduleHoursFromPositions(conn *sql.DB) error {
+	// Помечаем миграцию как выполненную, чтобы не повторять её при каждом
+	// запуске. Используем простой флаг в виде таблицы-маркера.
+	if exists, _ := hasTable(conn, "schema_migrations"); !exists {
+		if _, err := conn.Exec(`CREATE TABLE schema_migrations (
+			name TEXT PRIMARY KEY,
+			applied_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+		)`); err != nil {
+			return fmt.Errorf("ошибка создания schema_migrations: %w", err)
+		}
+	}
+	var applied int64
+	_ = conn.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE name = ?`, "schedule_hours_from_positions").Scan(&applied)
+	if applied > 0 {
+		return nil
+	}
+
+	// Пересчёт: берём hours_per_shift из positions через staff.
+	// COALESCE(NULL, 12) — fallback на дефолт, если у должности нет значения.
+	// Обновляем только рабочие дни.
+	res, err := conn.Exec(`
+		UPDATE schedule
+		SET hours = COALESCE(
+			(SELECT p.hours_per_shift
+			   FROM staff s
+			   LEFT JOIN positions p ON p.id = s.position_id
+			   WHERE s.id = schedule.user_id),
+			12
+		)
+		WHERE is_working_day = 1
+		  AND (hours IS NULL OR hours = 0 OR hours = 1)
+	`)
+	if err != nil {
+		return fmt.Errorf("ошибка UPDATE schedule.hours: %w", err)
+	}
+	_ = res
+
+	if _, err := conn.Exec(
+		`INSERT INTO schema_migrations (name) VALUES (?)`,
+		"schedule_hours_from_positions",
+	); err != nil {
+		return fmt.Errorf("ошибка записи schema_migrations: %w", err)
+	}
+
 	return nil
 }
 
@@ -224,6 +306,19 @@ func hasColumn(conn *sql.DB, tableName, columnName string) (bool, error) {
 	)
 	var cnt int64
 	if err := conn.QueryRow(sql).Scan(&cnt); err != nil {
+		return false, err
+	}
+	return cnt > 0, nil
+}
+
+// hasTable проверяет наличие таблицы в sqlite_master.
+func hasTable(conn *sql.DB, name string) (bool, error) {
+	var cnt int64
+	err := conn.QueryRow(
+		"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name = ?",
+		name,
+	).Scan(&cnt)
+	if err != nil {
 		return false, err
 	}
 	return cnt > 0, nil

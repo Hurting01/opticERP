@@ -104,8 +104,10 @@ async function handleSaveNewItem() {
     try {
       const created = await api.staff.create(newFullName.value, Number(selectedPositionId.value));
       if (created) {
+        // Бэкенд уже подтянул position_name через JOIN; используем его напрямую.
+        // Локальный поиск — лишь фолбэк на случай устаревшего ответа.
         const pos = positions.value.find((p) => p.id === Number(selectedPositionId.value));
-        staff.value = [...staff.value, { ...created, position_name: pos?.name || '' }];
+        staff.value = [...staff.value, { ...created, position_name: created.position_name || pos?.name || '' }];
       }
     } catch (err) {
       console.error('Ошибка создания сотрудника:', err);
@@ -174,9 +176,10 @@ async function saveEditStaff() {
   if (!editingStaff.value || !selectedPositionId.value || !newFullName.value.trim()) return;
   try {
     const updated = await api.staff.update(editingStaff.value.id, newFullName.value, Number(selectedPositionId.value));
+    // Бэкенд вернул сотрудника с уже подтянутым position_name.
     const pos = positions.value.find((p) => p.id === Number(selectedPositionId.value));
     staff.value = staff.value.map((s) =>
-      s.id === updated.id ? { ...updated, position_name: pos?.name || '' } : s
+      s.id === updated.id ? { ...updated, position_name: updated.position_name || pos?.name || '' } : s
     );
     editingStaff.value = null;
     selectedPositionId.value = '';
@@ -193,7 +196,18 @@ function cancelEditStaff() {
   newFullName.value = '';
 }
 
-function getPositionName(id) {
+function getPositionName(emp) {
+  // emp может быть как объектом из staff.value, так и просто id (для совместимости).
+  if (emp && typeof emp === 'object') {
+    // Сначала берём готовое поле с бэкенда (оно подтянуто через JOIN).
+    if (emp.position_name) return emp.position_name;
+    // Фолбэк: ищем локально по id (на случай устаревшего объекта).
+    if (emp.position_id != null) {
+      const p = positions.value.find((x) => x.id === Number(emp.position_id));
+      return p ? p.name : '';
+    }
+    return '';
+  }
   const p = positions.value.find((x) => x.id === id);
   return p ? p.name : '';
 }
@@ -418,7 +432,7 @@ onBeforeUnmount(() => {
               <td colspan="3" class="text-center text-muted">Нет сотрудников</td>
             </tr>
             <tr v-for="emp in staff" v-else :key="`staff-${emp.id}`">
-              <td>{{ getPositionName(emp.position_id) }}</td>
+              <td>{{ getPositionName(emp) }}</td>
               <td>{{ emp.full_name }}</td>
               <td>
                 <div class="d-flex gap-1">

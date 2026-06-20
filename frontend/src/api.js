@@ -40,7 +40,7 @@ export const api = {
     list: (from, to) => GetSchedule(from ?? '', to ?? ''),
     members: (year, month) => GetScheduleMembers(year, month),
     addMember: (userId, year, month) => AddScheduleMember(userId, year, month),
-    saveShift: (userId, date, shift) => SaveScheduleShift(userId, date, shift),
+    saveShift: (userId, date, shift, hours, isWorkingDay) => SaveScheduleShift(userId, date, shift, hours ?? 0, isWorkingDay ?? true),
     remove: (userId, date) => DeleteScheduleRecord(userId, date),
     clearForUser: (userId) => DeleteScheduleForUser(userId),
   },

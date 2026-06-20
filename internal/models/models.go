@@ -113,10 +113,12 @@ type CashOperation struct {
 
 // Schedule — запись расписания сотрудника на дату.
 type Schedule struct {
-	ID     int64  `json:"id"`
-	UserID int64  `json:"user_id"`
-	Date   string `json:"date"`
-	Shift  string `json:"shift"`
+	ID           int64   `json:"id"`
+	UserID       int64   `json:"user_id"`
+	Date         string  `json:"date"`
+	Shift        string  `json:"shift"`
+	Hours        float64 `json:"hours"`
+	IsWorkingDay bool    `json:"is_working_day"`
 }
 
 // === bonuses ===

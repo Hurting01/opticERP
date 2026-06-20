@@ -38,13 +38,15 @@ async function loadEmployees() {
     const staff = await api.staff.list();
     const positions = await api.positions.list();
     employees.value = staff.map((e) => {
+      // Бэкенд уже подтянул position_name через JOIN; используем его напрямую.
       const pos = positions.find((p) => p.id === e.position_id);
+      const positionName = e.position_name || pos?.name || '';
       return {
         ...e,
         fullName: e.full_name,
         isActive: e.is_active !== 0,
-        position: pos?.name || '',
-        position_name: pos?.name || '',
+        position: positionName,
+        position_name: positionName,
       };
     });
   } catch (err) {

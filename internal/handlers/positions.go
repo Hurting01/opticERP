@@ -112,11 +112,18 @@ func GetPositionByID(id int64) (models.Position, error) {
 }
 
 // UpdatePosition обновляет должность.
+// Если hours_per_shift изменился, пересчитывает hours во всех записях
+// schedule сотрудников этой должности, чтобы норматив часов за смену
+// всегда отражал текущее значение positions.
 func UpdatePosition(positionID int64, positionName string, normHours, salary *int64, hoursPerShift, additionalPayments *float64) (models.Position, error) {
 	conn, err := db.DB()
 	if err != nil {
 		return models.Position{}, err
 	}
+	// Запоминаем старый hours_per_shift, чтобы понять, менялся ли он.
+	var oldHoursPerShift sql.NullFloat64
+	_ = conn.QueryRow(`SELECT hours_per_shift FROM positions WHERE id = ?`, positionID).Scan(&oldHoursPerShift)
+
 	_, err = conn.Exec(
 		`UPDATE positions SET name = ?, norm_hours = ?, hours_per_shift = ?, salary = ?, additional_payments = ? WHERE id = ?`,
 		positionName, nullInt64(normHours), nullFloat64(hoursPerShift), nullInt64(salary), nullFloat64(additionalPayments), positionID,
@@ -124,6 +131,22 @@ func UpdatePosition(positionID int64, positionName string, normHours, salary *in
 	if err != nil {
 		return models.Position{}, fmt.Errorf("ошибка обновления должности: %w", err)
 	}
+
+	// Пересчитываем hours в записях графика, если hours_per_shift реально поменялся.
+	newHps := 0.0
+	if hoursPerShift != nil {
+		newHps = *hoursPerShift
+	}
+	oldVal := 0.0
+	if oldHoursPerShift.Valid {
+		oldVal = oldHoursPerShift.Float64
+	}
+	if newHps != oldVal {
+		if rerr := RecalculateScheduleHoursForPosition(conn, positionID); rerr != nil {
+			return models.Position{}, rerr
+		}
+	}
+
 	return GetPositionByID(positionID)
 }
 

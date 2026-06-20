@@ -56,19 +56,34 @@ func CreateStaff(fullName string, positionID int64) (models.StaffWithPosition, e
 }
 
 // UpdateStaff обновляет ФИО и должность сотрудника.
+// Если position_id изменился, пересчитывает hours в записях schedule
+// этого сотрудника, чтобы норматив часов за смену подтянулся с новой
+// должности (через positions.hours_per_shift).
 func UpdateStaff(staffID int64, newFullName string, newPositionID int64) (models.StaffWithPosition, error) {
 	conn, err := db.DB()
 	if err != nil {
 		return models.StaffWithPosition{}, err
 	}
+	// Запоминаем текущую должность, чтобы понять, менялась ли она.
+	var oldPositionID int64
+	_ = conn.QueryRow(`SELECT position_id FROM staff WHERE id = ?`, staffID).Scan(&oldPositionID)
+
 	_, err = conn.Exec(`UPDATE staff SET full_name = ?, position_id = ? WHERE id = ?`, newFullName, newPositionID, staffID)
 	if err != nil {
 		return models.StaffWithPosition{}, fmt.Errorf("ошибка обновления сотрудника: %w", err)
 	}
+
+	// Пересчитываем часы в графике, если должность поменялась.
+	if oldPositionID != newPositionID {
+		if rerr := recalculateScheduleHoursForUser(conn, staffID); rerr != nil {
+			return models.StaffWithPosition{}, rerr
+		}
+	}
+
 	return getStaffByID(staffID)
 }
 
-// DeleteStaff удаляет сотрудника.
+// DeleteStaff уд��ляет сотрудника.
 func DeleteStaff(staffID int64) (bool, error) {
 	conn, err := db.DB()
 	if err != nil {

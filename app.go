@@ -92,8 +92,8 @@ func (a *App) AddScheduleMember(userId int64, year int64, month int64) (bool, er
 // SaveScheduleShift — сохранить/обновить смену сотрудника на дату.
 // При shift == "" запись удаляется (логика пустой ячейки).
 // Возвращает true, если строка реально записана или удалена.
-func (a *App) SaveScheduleShift(userId int64, date string, shift string) (bool, error) {
-	return handlers.UpsertSchedule(userId, date, shift)
+func (a *App) SaveScheduleShift(userId int64, date string, shift string, hours float64, isWorkingDay bool) (bool, error) {
+	return handlers.UpsertSchedule(userId, date, shift, hours, isWorkingDay)
 }
 
 // DeleteScheduleRecord — удалить конкретную запись (user_id, date).
