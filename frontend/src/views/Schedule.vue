@@ -520,9 +520,8 @@ onMounted(async () => {
 
     <div class="card">
       <div class="card-body legend-body">
-        <div class="legend-item"><span class="legend-label">☑</span><span>— рабочий день</span></div>
         <div class="legend-item text-muted">
-          <span>Клик по ячейке — отметить/снять рабочий день.</span>
+          <span>Клик по ячейке — Добавить / Убрать рабочий день.</span>
         </div>
       </div>
     </div>
