@@ -263,7 +263,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div>
-    <NavigationHeader title="Настройки" />
+    <NavigationHeader title="Настройки" :hide-settings="true" />
 
     <ul class="nav nav-tabs mb-3">
       <li class="nav-item">

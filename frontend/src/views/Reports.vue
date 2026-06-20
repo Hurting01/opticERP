@@ -171,7 +171,7 @@ function fmt(n) {
 
 <template>
   <div>
-    <NavigationHeader title="Отчеты" />
+    <NavigationHeader title="Отчеты" :hide-reports="true" />
 
     <ul class="nav nav-tabs mb-3">
       <li class="nav-item">

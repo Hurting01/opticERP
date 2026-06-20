@@ -327,7 +327,7 @@ onMounted(async () => {
 
 <template>
   <div>
-    <NavigationHeader title="График" />
+    <NavigationHeader title="График" :hide-schedule="true" />
 
     <div v-if="lastError" class="alert alert-danger py-2 px-3" role="alert">
       {{ lastError }}

@@ -280,7 +280,7 @@ const uniquePositions = computed(() => [...new Set(allEmployees.value.map((e) =>
 
 <template>
   <div>
-    <NavigationHeader :title="title" :show-back-button="true" back-url="/" />
+    <NavigationHeader :title="title" />
 
     <div class="day-wrapper">
       <div class="main-section">
