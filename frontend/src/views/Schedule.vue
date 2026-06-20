@@ -84,6 +84,14 @@ const groupedData = computed(() => {
 const editingCell = ref(null);
 const isSaving = ref(false);
 
+// Сотрудники, которых ещё нет в текущем графике — показываем их в селекторе
+// модалки добавления записи, чтобы нельзя было добавить одного и того же
+// сотрудника дважды.
+const availableEmployees = computed(() => {
+  const scheduledIds = new Set(scheduleData.value.map((item) => item.id));
+  return employees.value.filter((emp) => !scheduledIds.has(emp.id));
+});
+
 // === работа с сотрудниками ===
 
 async function loadEmployees() {
@@ -537,7 +545,7 @@ onMounted(async () => {
                 :disabled="isLoadingEmployees"
               >
                 <option value="">Выберите сотрудника</option>
-                <option v-for="emp in employees" :key="emp.id" :value="emp.id">{{ emp.fullName }}</option>
+                <option v-for="emp in availableEmployees" :key="emp.id" :value="emp.id">{{ emp.fullName }}</option>
               </select>
             </div>
           </div>
