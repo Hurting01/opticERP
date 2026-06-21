@@ -83,7 +83,7 @@ func UpdateStaff(staffID int64, newFullName string, newPositionID int64) (models
 	return getStaffByID(staffID)
 }
 
-// DeleteStaff уд��ляет сотрудника.
+// DeleteStaff удаляет сотрудника.
 func DeleteStaff(staffID int64) (bool, error) {
 	conn, err := db.DB()
 	if err != nil {
