@@ -63,6 +63,7 @@ type Sale struct {
 	CashAmount    float64 `json:"cash_amount"`
 	CardAmount    float64 `json:"card_amount"`
 	SbpAmount     float64 `json:"sbp_amount"`
+	Comment       *string `json:"comment"`
 	CreatedAt     string  `json:"created_at"`
 }
 

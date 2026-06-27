@@ -16,6 +16,12 @@ import {
   SaveScheduleShift,
   DeleteScheduleRecord,
   DeleteScheduleForUser,
+  GetScheduleForDate,
+  GetSalesByDate,
+  CreateSale,
+  UpdateSale,
+  DeleteSale,
+  GetSalesByDateRange,
 } from '../wailsjs/go/main/App';
 
 export const api = {
@@ -43,6 +49,17 @@ export const api = {
     saveShift: (userId, date, shift, hours, isWorkingDay) => SaveScheduleShift(userId, date, shift, hours ?? 0, isWorkingDay ?? true),
     remove: (userId, date) => DeleteScheduleRecord(userId, date),
     clearForUser: (userId) => DeleteScheduleForUser(userId),
+    getForDate: (date) => GetScheduleForDate(date),
+  },
+  // Работа с продажами.
+  sales: {
+    getByDate: (date) => GetSalesByDate(date),
+    create: (dateTime, productName, recipe, totalAmount, advanceAmount, cashAmount, cardAmount, sbpAmount, comment) =>
+      CreateSale(dateTime, productName, recipe ?? null, totalAmount, advanceAmount, cashAmount, cardAmount, sbpAmount, comment ?? null),
+    update: (id, dateTime, productName, recipe, totalAmount, advanceAmount, cashAmount, cardAmount, sbpAmount, comment) =>
+      UpdateSale(id, dateTime, productName, recipe ?? null, totalAmount, advanceAmount, cashAmount, cardAmount, sbpAmount, comment ?? null),
+    remove: (id) => DeleteSale(id),
+    getByDateRange: (from, to) => GetSalesByDateRange(from, to),
   },
 };
 

@@ -194,6 +194,12 @@ func Migrate(conn *sql.DB) error {
 		_, _ = conn.Exec(`ALTER TABLE schedule ADD COLUMN is_working_day INTEGER DEFAULT 1`)
 	}
 
+	// Миграция для добавления поля comment в таблицу sales
+	if columnExists, _ := hasColumn(conn, "sales", "comment"); !columnExists {
+		_, _ = conn.Exec(`ALTER TABLE sales ADD COLUMN comment TEXT`)
+	}
+
+
 	for _, s := range stmts {
 		if _, err := conn.Exec(s); err != nil {
 			return fmt.Errorf("ошибка миграции: %w\nSQL: %s", err, s)

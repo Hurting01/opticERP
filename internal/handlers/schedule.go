@@ -222,6 +222,43 @@ func GetScheduleMembers(year, month int64) ([]int64, error) {
 	return result, rows.Err()
 }
 
+// GetScheduleForDate возвращает полную информацию о сотрудниках, работающих в конкретный день.
+// Возвращает массив с полями: id, full_name, position_name, position_id.
+func GetScheduleForDate(date string) ([]models.StaffWithPosition, error) {
+	conn, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
+	if date == "" {
+		return nil, errors.New("дата не может быть пустой")
+	}
+
+	query := `
+		SELECT DISTINCT s.id, s.full_name, s.position_id, COALESCE(p.name, '') AS position_name, s.is_active, s.created_at
+		FROM schedule sc
+		INNER JOIN staff s ON sc.user_id = s.id
+		LEFT JOIN positions p ON s.position_id = p.id
+		WHERE sc.date = ? AND sc.is_working_day = 1 AND s.is_active = 1
+		ORDER BY p.name, s.full_name
+	`
+
+	rows, err := conn.Query(query, date)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка чтения сотрудников для даты %s: %w", date, err)
+	}
+	defer rows.Close()
+
+	result := make([]models.StaffWithPosition, 0)
+	for rows.Next() {
+		var staff models.StaffWithPosition
+		if err := rows.Scan(&staff.ID, &staff.FullName, &staff.PositionID, &staff.PositionName, &staff.IsActive, &staff.CreatedAt); err != nil {
+			return nil, fmt.Errorf("ошибка сканирования сотрудника: %w", err)
+		}
+		result = append(result, staff)
+	}
+	return result, rows.Err()
+}
+
 // AddScheduleMember сохраняет факт добавления сотрудника в график месяца.
 func AddScheduleMember(userID, year, month int64) (bool, error) {
 	conn, err := db.DB()

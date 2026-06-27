@@ -107,6 +107,60 @@ func (a *App) DeleteScheduleForUser(userId int64) (bool, error) {
 	return handlers.DeleteScheduleForUser(userId)
 }
 
+// GetScheduleForDate — получить сотрудников, работающих в конкретный день.
+// Возвращает массив с полной информацией о сотрудниках (id, full_name, position_name).
+func (a *App) GetScheduleForDate(date string) ([]models.StaffWithPosition, error) {
+	return handlers.GetScheduleForDate(date)
+}
+
+// === Продажи ===
+
+// GetSalesByDate — получить все продажи за указанную дату (YYYY-MM-DD).
+func (a *App) GetSalesByDate(date string) ([]models.Sale, error) {
+	return handlers.GetSalesByDate(date)
+}
+
+// CreateSale — создать новую продажу.
+func (a *App) CreateSale(
+	dateTime string,
+	productName string,
+	recipe *string,
+	totalAmount float64,
+	advanceAmount float64,
+	cashAmount float64,
+	cardAmount float64,
+	sbpAmount float64,
+	comment *string,
+) (models.Sale, error) {
+	return handlers.CreateSale(dateTime, productName, recipe, totalAmount, advanceAmount, cashAmount, cardAmount, sbpAmount, comment)
+}
+
+// UpdateSale — обновить существующую продажу.
+func (a *App) UpdateSale(
+	id int64,
+	dateTime string,
+	productName string,
+	recipe *string,
+	totalAmount float64,
+	advanceAmount float64,
+	cashAmount float64,
+	cardAmount float64,
+	sbpAmount float64,
+	comment *string,
+) (models.Sale, error) {
+	return handlers.UpdateSale(id, dateTime, productName, recipe, totalAmount, advanceAmount, cashAmount, cardAmount, sbpAmount, comment)
+}
+
+// DeleteSale — удалить продажу по ID.
+func (a *App) DeleteSale(id int64) (bool, error) {
+	return handlers.DeleteSale(id)
+}
+
+// GetSalesByDateRange — получить продажи за диапазон дат (from, to в формате YYYY-MM-DD).
+func (a *App) GetSalesByDateRange(from string, to string) ([]models.Sale, error) {
+	return handlers.GetSalesByDateRange(from, to)
+}
+
 // === Сервисная команда (использовалась в Tauri-версии для проверки IPC) ===
 
 // Greet возвращает приветствие. Оставлено для отладки/обратной совместимости.
